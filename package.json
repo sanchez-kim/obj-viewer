@@ -1,0 +1,25 @@
+{
+  "name": "vertex",
+  "version": "1.0.0",
+  "description": "OBJ visualizer",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "vite --host 0.0.0.0 --port 3000",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "express-fileupload": "^1.4.1",
+    "netlify-cli": "^16.4.2",
+    "three": "^0.156.1"
+  },
+  "keywords": [],
+  "devDependencies": {
+    "vite": "^4.4.9"
+  }
+}

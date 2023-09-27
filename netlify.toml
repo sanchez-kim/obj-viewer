@@ -1,0 +1,12 @@
+[build]
+  command = "yarn build"
+  publish = "dist"
+
+[redirects]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[functions]
+  name = "list-obj-files"
+  path = "functions/list-obj-files.js"

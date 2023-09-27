@@ -119,7 +119,7 @@ function loadObjFile(filePath) {
   );
 }
 
-fetch("/list-obj-files")
+fetch("/.netlify/functions/list-obj-files")
   .then((res) => {
     if (!res.ok) {
       return Promise.reject("Failed to fetch");

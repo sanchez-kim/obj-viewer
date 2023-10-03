@@ -119,11 +119,12 @@ function loadObjFile(filePath) {
   );
 }
 
-fetch("/.netlify/functions/list-obj-files")
+fetch("/.netlify/functions/list-objs")
   .then((res) => {
     if (!res.ok) {
       return Promise.reject("Failed to fetch");
     }
+    // check functions
     return res.json();
   })
   .then((data) => {

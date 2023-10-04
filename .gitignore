@@ -1,5 +1,12 @@
+# common
 node_modules
+.DS_Store
+
+# temp
 .vscode
+
+# build
 dist
+
 # Local Netlify folder
 .netlify

@@ -13,9 +13,6 @@ header {
 main {
   display: flex;
   margin: auto;
-  /* border: 1px solid #ccc;
-  border-radius: 10px;
-  padding: 30px; */
 }
 
 #logo {

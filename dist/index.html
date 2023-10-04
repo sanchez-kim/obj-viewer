@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+  <head lang="en">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OBJ Viewer</title>
+    
+    <script type="module" crossorigin src="/assets/index-6ab88f19.js"></script>
+    <link rel="stylesheet" href="/assets/index-eab1a59c.css">
+  </head>
+  <body>
+    <header>
+      <img src="/assets/logo_white.svg" id="logo" alt="logo" />
+    </header>
+    <main>
+      <div class="container">
+        <h3>Toggle Visibility</h3>
+        <div class="toggle-switches">
+          <div class="lip-vertex">
+            <h3>Lip Vertex</h3>
+            <label class="switch">
+              <input type="checkbox" id="toggleVertices" checked />
+              <span class="slider round"></span>
+            </label>
+          </div>
+          <div class="lip-mask">
+            <h3>Lip Mask</h3>
+            <label class="switch">
+              <input type="checkbox" id="toggleBoundingBox" checked />
+              <span class="slider round"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="fileListContainer">
+        <h3>OBJ File List</h3>
+        <div id="fileList"></div>
+      </div>
+    </main>
+
+    <footer>Copyright ⓒ 2023 Insighter Corp. All Rights Reserved.</footer>
+
+    
+  </body>
+</html>

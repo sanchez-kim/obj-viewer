@@ -2,6 +2,11 @@
   command = "yarn build"
   publish = "dist"
 
+[[headers]]
+  for = "/*.obj"
+  [headers.values]
+    Content-Type = "text/plain"
+
 [[redirects]]
   from = "/*"
   to = "/index.html"

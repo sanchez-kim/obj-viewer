@@ -1,6 +1,5 @@
 import * as THREE from "three";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { extractVertexPositions, getLipIndices } from "./utils.js";
 
 const scene = new THREE.Scene();
@@ -24,12 +23,9 @@ const light = new THREE.DirectionalLight(0xffffff, 2.0);
 light.position.set(1, 1, 1).normalize();
 scene.add(light);
 
-const controls = new OrbitControls(camera, renderer.domElement);
-
 function animate() {
   requestAnimationFrame(animate);
   renderer.render(scene, camera);
-  controls.update();
 }
 
 let showVertices = true;
@@ -86,7 +82,7 @@ function loadObjFile(filePath) {
               });
               const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
               sphere.position.copy(vertex);
-              sphere.userData.vertexIndex = index;
+
               scene.add(sphere);
 
               min.min(vertex);
@@ -117,8 +113,8 @@ function loadObjFile(filePath) {
         });
     },
     (xhr) => {
-      // // loading progress
-      // console.log((xhr.loaded / xhr.total) * 100 + "% loaded");
+      // loading progress
+      console.log((xhr.loaded / xhr.total) * 100 + "% loaded");
     },
     (error) => {
       console.error("An error occurred", error);

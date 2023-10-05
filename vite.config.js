@@ -1,9 +1,10 @@
 export default {
   server: {
     proxy: {
-      "/list-obj-files": {
-        target: "http://localhost:3000",
+      "/.netlify/functions/list-obj": {
+        target: "http://localhost:8888",
         changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/\.netlify\/functions\//, "/"),
       },
     },
   },

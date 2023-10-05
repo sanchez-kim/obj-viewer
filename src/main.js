@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { extractVertexPositions, getLipIndices } from "./utils.js";
 
 const scene = new THREE.Scene();
@@ -23,9 +24,12 @@ const light = new THREE.DirectionalLight(0xffffff, 2.0);
 light.position.set(1, 1, 1).normalize();
 scene.add(light);
 
+const controls = new OrbitControls(camera, renderer.domElement);
+
 function animate() {
   requestAnimationFrame(animate);
   renderer.render(scene, camera);
+  controls.update();
 }
 
 let showVertices = true;
@@ -34,8 +38,9 @@ let spheres = [];
 let boxHelper;
 let extendedBoxHelper;
 let boxes = [];
-const defaultObj = "/assets/obj/frame0000.obj";
+const defaultObj = "/netlify/functions/obj/frame0000.obj";
 
+// remove previous lip vertices
 function clearPreviousLip() {
   spheres.forEach((sphere) => scene.remove(sphere));
   boxes.forEach((box) => scene.remove(box));
@@ -43,6 +48,7 @@ function clearPreviousLip() {
   boxes = [];
 }
 
+// removes previous OBJ and load new one
 function loadObjFile(filePath) {
   if (currentObj) {
     scene.remove(currentObj);
@@ -66,9 +72,10 @@ function loadObjFile(filePath) {
 
       Promise.all([
         extractVertexPositions(filePath),
-        getLipIndices("/assets/lip_vertices_idx_v2.txt"),
+        getLipIndices("lip_index_new.txt"),
       ])
         .then(([vertices, lipIndices]) => {
+          console.log(lipIndices.length);
           const min = new THREE.Vector3(Infinity, Infinity, Infinity);
           const max = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
           lipIndices.forEach((index) => {
@@ -79,8 +86,8 @@ function loadObjFile(filePath) {
                 color: 0xff0000,
               });
               const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-
               sphere.position.copy(vertex);
+              sphere.userData.vertexIndex = index;
               scene.add(sphere);
 
               min.min(vertex);
@@ -88,7 +95,7 @@ function loadObjFile(filePath) {
 
               spheres.push(sphere);
             } else {
-              console.error(`Vertext index ${index} is out of bounds`);
+              console.error(`Vertex index ${index} is out of bounds`);
             }
           });
           animate();
@@ -111,6 +118,7 @@ function loadObjFile(filePath) {
         });
     },
     (xhr) => {
+      // loading progress
       console.log((xhr.loaded / xhr.total) * 100 + "% loaded");
     },
     (error) => {
@@ -119,12 +127,12 @@ function loadObjFile(filePath) {
   );
 }
 
+// function to list obj items inside static directory
 fetch("/.netlify/functions/list-objs")
   .then((res) => {
     if (!res.ok) {
       return Promise.reject("Failed to fetch");
     }
-    // check functions
     return res.json();
   })
   .then((data) => {
@@ -136,7 +144,7 @@ fetch("/.netlify/functions/list-objs")
           child.classList.remove("selected");
         });
         fileItem.classList.add("selected");
-        loadObjFile(`/assets/obj/${file}`);
+        loadObjFile(`/netlify/functions/obj/${file}`);
       });
 
       fileList.appendChild(fileItem);
@@ -153,6 +161,7 @@ fetch("/.netlify/functions/list-objs")
     }
   });
 
+// always load default (initial) obj file
 loadObjFile(defaultObj);
 
 document.getElementById("toggleVertices").addEventListener("click", () => {

@@ -72,10 +72,9 @@ function loadObjFile(filePath) {
 
       Promise.all([
         extractVertexPositions(filePath),
-        getLipIndices("lip_index_new.txt"),
+        getLipIndices("lip_index.txt"),
       ])
         .then(([vertices, lipIndices]) => {
-          console.log(lipIndices.length);
           const min = new THREE.Vector3(Infinity, Infinity, Infinity);
           const max = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
           lipIndices.forEach((index) => {
@@ -118,8 +117,8 @@ function loadObjFile(filePath) {
         });
     },
     (xhr) => {
-      // loading progress
-      console.log((xhr.loaded / xhr.total) * 100 + "% loaded");
+      // // loading progress
+      // console.log((xhr.loaded / xhr.total) * 100 + "% loaded");
     },
     (error) => {
       console.error("An error occurred", error);

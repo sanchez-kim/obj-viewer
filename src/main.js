@@ -46,6 +46,7 @@ function clearPreviousLip() {
 
 // removes previous OBJ and load new one
 function loadObjFile(filePath) {
+  console.log(filePath);
   if (currentObj) {
     scene.remove(currentObj);
     clearPreviousLip();
@@ -65,6 +66,7 @@ function loadObjFile(filePath) {
         }
       });
       animate();
+
       Promise.all([
         extractVertexPositions(filePath),
         getLipIndices("lip_index.txt"),

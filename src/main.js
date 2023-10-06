@@ -30,7 +30,7 @@ function animate() {
 
 let currentObj = null;
 let spheres = [];
-let areBoundingBoxesVisble = true;
+let show = true;
 let boxHelper;
 let extendedBoxHelper;
 let boxWithoutPaddingHelper;
@@ -193,14 +193,14 @@ if (defaultFileDiv) {
 loadObjFile(defaultObj);
 
 document.getElementById("toggleVertices").addEventListener("click", () => {
-  showVertices = !showVertices;
-  spheres.forEach((sphere) => (sphere.visible = showVertices));
+  show = !show;
+  spheres.forEach((sphere) => (sphere.visible = show));
 });
 
 document.getElementById("toggleBoundingBox").addEventListener("click", () => {
-  areBoundingBoxesVisble = !areBoundingBoxesVisble;
+  show = !show;
 
-  boxHelper.visible = areBoundingBoxesVisble;
-  extendedBoxHelper.visible = areBoundingBoxesVisble;
-  boxWithoutPaddingHelper.visible = areBoundingBoxesVisble;
+  boxHelper.visible = show;
+  extendedBoxHelper.visible = show;
+  boxWithoutPaddingHelper.visible = show;
 });

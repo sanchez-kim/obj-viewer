@@ -34,7 +34,8 @@ let spheres = [];
 let boxHelper;
 let extendedBoxHelper;
 let boxes = [];
-const defaultObj = "/netlify/functions/obj/frame0000.obj";
+const defaultObj =
+  "https://ins-ai-speech.s3.ap-northeast-2.amazonaws.com/tmp/frame0000.obj";
 
 // remove previous lip vertices
 function clearPreviousLip() {

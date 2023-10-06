@@ -28,11 +28,12 @@ function animate() {
   renderer.render(scene, camera);
 }
 
-let showVertices = true;
 let currentObj = null;
 let spheres = [];
+let areBoundingBoxesVisble = true;
 let boxHelper;
 let extendedBoxHelper;
+let boxWithoutPaddingHelper;
 let boxes = [];
 const defaultObj =
   "https://ins-ai-speech.s3.ap-northeast-2.amazonaws.com/tmp/frame0000.obj";
@@ -107,7 +108,7 @@ function loadObjFile(filePath) {
           animate();
 
           const boxWithoutPadding = new THREE.Box3(min, max);
-          const boxWithoutPaddingHelper = new THREE.Box3Helper(
+          boxWithoutPaddingHelper = new THREE.Box3Helper(
             boxWithoutPadding,
             0xffd133
           ); // Yellow color for standard box
@@ -197,7 +198,9 @@ document.getElementById("toggleVertices").addEventListener("click", () => {
 });
 
 document.getElementById("toggleBoundingBox").addEventListener("click", () => {
-  const showBoundingBox = boxHelper.visible;
-  boxHelper.visible = !showBoundingBox;
-  extendedBoxHelper.visible = !showBoundingBox;
+  areBoundingBoxesVisble = !areBoundingBoxesVisble;
+
+  boxHelper.visible = areBoundingBoxesVisble;
+  extendedBoxHelper.visible = areBoundingBoxesVisble;
+  boxWithoutPaddingHelper.visible = areBoundingBoxesVisble;
 });

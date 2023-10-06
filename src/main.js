@@ -70,10 +70,22 @@ function loadObjFile(filePath) {
       Promise.all([
         extractVertexPositions(filePath),
         getLipIndices("lip_index.txt"),
+        getLipIndices("lip_outline_index.txt"),
       ])
-        .then(([vertices, lipIndices]) => {
+        .then(([vertices, lipIndices, outLip]) => {
           const min = new THREE.Vector3(Infinity, Infinity, Infinity);
           const max = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
+          outLip.forEach((index) => {
+            if (index >= 0 && index < vertices.length) {
+              const vertex = vertices[index];
+
+              min.min(vertex);
+              max.max(vertex);
+            } else {
+              console.error(`Vertex index ${index} is out of bounds`);
+            }
+          });
+
           lipIndices.forEach((index) => {
             if (index >= 0 && index < vertices.length) {
               const vertex = vertices[index];
@@ -86,9 +98,6 @@ function loadObjFile(filePath) {
 
               scene.add(sphere);
 
-              min.min(vertex);
-              max.max(vertex);
-
               spheres.push(sphere);
             } else {
               console.error(`Vertex index ${index} is out of bounds`);
@@ -96,16 +105,37 @@ function loadObjFile(filePath) {
           });
           animate();
 
-          const box = new THREE.Box3(min, max);
-          boxHelper = new THREE.Box3Helper(box, 0x33ff45);
+          const boxWithoutPadding = new THREE.Box3(min, max);
+          const boxWithoutPaddingHelper = new THREE.Box3Helper(
+            boxWithoutPadding,
+            0xffd133
+          ); // Yellow color for standard box
 
-          const extendedMin = min.clone().add(new THREE.Vector3(-0.8, -1, 0));
-          const extendedMax = max.clone().add(new THREE.Vector3(0.8, 1, 0));
+          const paddingForBox = new THREE.Vector3(0.8, 1, 0); // 80px horizontally and 100px vertically
+
+          const minWithPadding = min.clone().sub(paddingForBox);
+          const maxWithPadding = max.clone().add(paddingForBox);
+
+          const box = new THREE.Box3(minWithPadding, maxWithPadding);
+          boxHelper = new THREE.Box3Helper(box, 0x33ff45); // Green color for first padded box
+
+          const additionalPaddingForExtendedBox = new THREE.Vector3(0.8, 1, 0); // Additional 80px horizontally and 100px vertically
+
+          const extendedMin = minWithPadding
+            .clone()
+            .sub(additionalPaddingForExtendedBox);
+          const extendedMax = maxWithPadding
+            .clone()
+            .add(additionalPaddingForExtendedBox);
+
           const extendedBox = new THREE.Box3(extendedMin, extendedMax);
-          extendedBoxHelper = new THREE.Box3Helper(extendedBox, 0x33ff45);
+          extendedBoxHelper = new THREE.Box3Helper(extendedBox, 0xff33ce); // Green color for extended padded box
 
+          scene.add(boxWithoutPaddingHelper);
           scene.add(boxHelper);
           scene.add(extendedBoxHelper);
+
+          boxes.push(boxWithoutPaddingHelper);
           boxes.push(boxHelper);
           boxes.push(extendedBoxHelper);
         })
@@ -123,39 +153,39 @@ function loadObjFile(filePath) {
   );
 }
 
-// function to list obj items inside static directory
-fetch("/.netlify/functions/list-objs")
-  .then((res) => {
-    if (!res.ok) {
-      return Promise.reject("Failed to fetch");
-    }
-    return res.json();
-  })
-  .then((data) => {
-    data.files.forEach((file) => {
-      const fileItem = document.createElement("div");
-      fileItem.textContent = file;
-      fileItem.addEventListener("click", () => {
-        Array.from(fileList.children).forEach((child) => {
-          child.classList.remove("selected");
-        });
-        fileItem.classList.add("selected");
-        loadObjFile(`/netlify/functions/obj/${file}`);
-      });
+const objLinks = [
+  "https://ins-ai-speech.s3.ap-northeast-2.amazonaws.com/tmp/frame0000.obj",
+  "https://ins-ai-speech.s3.ap-northeast-2.amazonaws.com/tmp/frame0021.obj",
+  "https://ins-ai-speech.s3.ap-northeast-2.amazonaws.com/tmp/frame0030.obj",
+  "https://ins-ai-speech.s3.ap-northeast-2.amazonaws.com/tmp/frame0038.obj",
+];
 
-      fileList.appendChild(fileItem);
+objLinks.forEach((link) => {
+  const fileName = link.split("/").pop(); // Extract the filename from the URL
+
+  const fileItem = document.createElement("div");
+  fileItem.textContent = fileName;
+  fileItem.addEventListener("click", () => {
+    Array.from(fileList.children).forEach((child) => {
+      child.classList.remove("selected");
     });
-
-    const objFileList = document.getElementById("fileList");
-    const defaultFileDiv = [...objFileList.children].find(
-      (div) => div.textContent === "frame0000.obj"
-    );
-    if (defaultFileDiv) {
-      defaultFileDiv.classList.add("selected");
-    } else {
-      console.error("Default file not found");
-    }
+    fileItem.classList.add("selected");
+    loadObjFile(link); // Now directly using the public link to load the OBJ
   });
+
+  fileList.appendChild(fileItem);
+});
+
+const objFileList = document.getElementById("fileList");
+const defaultFileDiv = [...objFileList.children].find(
+  (div) => div.textContent === "frame0000.obj"
+);
+if (defaultFileDiv) {
+  defaultFileDiv.classList.add("selected");
+  loadObjFile("https://your-s3-bucket-url/path-to-your-default-object.obj"); // Load default OBJ on page load
+} else {
+  console.error("Default file not found");
+}
 
 // always load default (initial) obj file
 loadObjFile(defaultObj);

@@ -2,7 +2,6 @@ const fs = require("fs");
 const path = require("path");
 
 exports.handler = async (event, context) => {
-  console.log(path.resolve(__dirname));
   try {
     const objDir = path.join(__dirname, "obj");
     console.log(objDir);

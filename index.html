@@ -4,12 +4,12 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>OBJ Viewer</title>
-    <link rel="icon" href="/favicon.ico" />
-    <link rel="stylesheet" href="/style.css" />
+    <link rel="icon" href="public/favicon.ico" />
+    <link rel="stylesheet" href="public/style.css" />
   </head>
   <body>
     <header>
-      <img src="/logo_white.svg" id="logo" alt="logo" />
+      <img src="public/logo_white.svg" id="logo" alt="logo" />
     </header>
     <main>
       <div class="container">
@@ -33,12 +33,13 @@
       </div>
       <div class="fileListContainer">
         <h3>OBJ File List</h3>
+        <button id="selectDirectory">폴더선택</button>
         <div id="fileList"></div>
       </div>
     </main>
 
     <footer>Copyright ⓒ 2023 Insighter Corp. All Rights Reserved.</footer>
 
-    <script type="module" src="/src/main.js"></script>
+    <script type="module" src="renderer.js"></script>
   </body>
 </html>

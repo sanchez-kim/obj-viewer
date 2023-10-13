@@ -1,6 +1,6 @@
-import * as THREE from "three";
+const THREE = require("three");
 
-export async function extractVertexPositions(filePath) {
+async function extractVertexPositions(filePath) {
   const response = await fetch(filePath);
   const text = await response.text();
   const lines = text.split("\n");
@@ -16,7 +16,7 @@ export async function extractVertexPositions(filePath) {
   return vertices;
 }
 
-export async function getLipIndices(filePath) {
+async function getLipIndices(filePath) {
   try {
     const response = await fetch(filePath);
     if (!response.ok) {
@@ -28,3 +28,8 @@ export async function getLipIndices(filePath) {
     console.error("There has been a problem", error);
   }
 }
+
+module.exports = {
+  extractVertexPositions,
+  getLipIndices,
+};

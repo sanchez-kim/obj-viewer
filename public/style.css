@@ -156,3 +156,26 @@ footer {
   width: 100%;
   bottom: 0;
 }
+
+#selectDirectory {
+  background-color: #007bff; /* Set the background color */
+  color: white; /* Set the text color to white */
+  border: none; /* Remove the default border */
+  padding: 10px 20px; /* Add some padding to the button */
+  border-radius: 4px; /* Round the corners of the button */
+  cursor: pointer; /* Change cursor to pointer on hover */
+  transition: background-color 0.3s ease; /* Smooth transition for hover effect */
+  font-size: 16px; /* Adjust font size if needed */
+  outline: none; /* Remove the outline */
+}
+
+#selectDirectory:hover {
+  background-color: #0056b3; /* Darken the color slightly for a hover effect */
+}
+
+#selectDirectory:active {
+  background-color: #004092; /* Darken the color even more when the button is active (clicked) */
+}
+
+.buttonContainer {
+}

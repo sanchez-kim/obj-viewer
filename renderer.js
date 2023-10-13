@@ -1,6 +1,7 @@
-import * as THREE from "three";
-import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
-import { extractVertexPositions, getLipIndices } from "./utils.js";
+const THREE = require("three");
+const { OBJLoader } = require("three/examples/jsm/loaders/OBJLoader.js");
+const { extractVertexPositions, getLipIndices } = require("./utils.js");
+const ipcRenderer = require("electron").ipcRenderer;
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(
@@ -38,6 +39,51 @@ let boxes = [];
 const defaultObj =
   "https://ins-ai-speech.s3.ap-northeast-2.amazonaws.com/tmp/frame0000.obj";
 
+async function setLibraryFolderAndLoadFiles() {
+  console.log("Button clicked!");
+  const directoryPaths = await ipcRenderer.invoke("open-directory-dialog");
+  console.log("Directory paths received: ", directoryPaths);
+  if (directoryPaths && directoryPaths.length > 0) {
+    const selectedDirectory = directoryPaths[0];
+    loadObjFilesFromDirectory(selectedDirectory);
+  }
+}
+
+function loadObjFilesFromDirectory(directory) {
+  const fs = require("fs");
+  const path = require("path");
+
+  fs.readdir(directory, (err, files) => {
+    if (err) {
+      console.error("Error reading directory:", err);
+      return;
+    }
+
+    const objFiles = files.filter(
+      (file) => path.extname(file).toLowerCase() === ".obj"
+    );
+
+    const fileList = document.getElementById("fileList");
+    fileList.innerHTML = ""; // Clear the previous file list
+
+    objFiles.forEach((objFile) => {
+      const filePath = path.join(directory, objFile);
+
+      const fileItem = document.createElement("div");
+      fileItem.textContent = objFile;
+      fileItem.addEventListener("click", () => {
+        Array.from(fileList.children).forEach((child) => {
+          child.classList.remove("selected");
+        });
+        fileItem.classList.add("selected");
+        loadObjFile(filePath); // Now loading from local directory
+      });
+
+      fileList.appendChild(fileItem);
+    });
+  });
+}
+
 // remove previous lip vertices
 function clearPreviousLip() {
   spheres.forEach((sphere) => scene.remove(sphere));
@@ -55,8 +101,10 @@ function loadObjFile(filePath) {
   }
 
   const loader = new OBJLoader();
+  loader.setPath(path.dirname(filePath) + "/"); // set teh filepath
   loader.load(
-    filePath,
+    // filePath,
+    path.basename(filePath),
     async (object) => {
       scene.add(object); // add new obj to the scene
       currentObj = object; // update the reference to the currently displayed obj
@@ -155,42 +203,9 @@ function loadObjFile(filePath) {
   );
 }
 
-const objLinks = [
-  "https://ins-ai-speech.s3.ap-northeast-2.amazonaws.com/tmp/frame0000.obj",
-  "https://ins-ai-speech.s3.ap-northeast-2.amazonaws.com/tmp/frame0021.obj",
-  "https://ins-ai-speech.s3.ap-northeast-2.amazonaws.com/tmp/frame0030.obj",
-  "https://ins-ai-speech.s3.ap-northeast-2.amazonaws.com/tmp/frame0038.obj",
-];
-
-objLinks.forEach((link) => {
-  const fileName = link.split("/").pop(); // Extract the filename from the URL
-
-  const fileItem = document.createElement("div");
-  fileItem.textContent = fileName;
-  fileItem.addEventListener("click", () => {
-    Array.from(fileList.children).forEach((child) => {
-      child.classList.remove("selected");
-    });
-    fileItem.classList.add("selected");
-    loadObjFile(link); // Now directly using the public link to load the OBJ
-  });
-
-  fileList.appendChild(fileItem);
-});
-
-const objFileList = document.getElementById("fileList");
-const defaultFileDiv = [...objFileList.children].find(
-  (div) => div.textContent === "frame0000.obj"
-);
-if (defaultFileDiv) {
-  defaultFileDiv.classList.add("selected");
-  loadObjFile("https://your-s3-bucket-url/path-to-your-default-object.obj"); // Load default OBJ on page load
-} else {
-  console.error("Default file not found");
-}
-
-// always load default (initial) obj file
-loadObjFile(defaultObj);
+document
+  .getElementById("selectDirectory")
+  .addEventListener("click", setLibraryFolderAndLoadFiles);
 
 document.getElementById("toggleVertices").addEventListener("click", () => {
   show = !show;

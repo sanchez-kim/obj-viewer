@@ -1,14 +1,16 @@
 {
-  "name": "vertex",
+  "name": "obj-viewer",
   "version": "1.0.0",
-  "description": "OBJ visualizer",
-  "main": "index.js",
+  "description": "Load OBJ files and visualize lip vertices",
+  "main": "main.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "electron ."
   },
+  "type": "commonjs",
   "author": "",
   "license": "ISC",
   "dependencies": {
@@ -16,10 +18,12 @@
     "express": "^4.18.2",
     "express-fileupload": "^1.4.1",
     "netlify-cli": "^16.4.2",
-    "three": "^0.156.1"
+    "three": "^0.156.1",
+    "yarn": "^1.22.19"
   },
   "keywords": [],
   "devDependencies": {
+    "electron": "^27.0.0",
     "vite": "^4.4.9"
   }
 }

@@ -3,8 +3,9 @@ const path = require("path");
 
 function createWindow() {
   const win = new BrowserWindow({
-    width: 800,
-    height: 600,
+    width: 1800,
+    height: 1000,
+    icon: path.join(__dirname, "public/insighter.ico"),
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,

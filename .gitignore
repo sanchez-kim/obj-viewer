@@ -1,5 +1,7 @@
 # common
+.gitignore
 node_modules
+release-builds
 .DS_Store
 
 # temp

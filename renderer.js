@@ -1,5 +1,9 @@
 const THREE = require("three");
-const { OBJLoader } = require("three/examples/jsm/loaders/OBJLoader.js");
+let OBJLoader;
+(async function () {
+  const module = await import("OBJLoader");
+  OBJLoader = module.OBJLoader;
+})();
 const { extractVertexPositions, getLipIndices } = require("./utils.js");
 const ipcRenderer = require("electron").ipcRenderer;
 
@@ -36,11 +40,8 @@ let boxHelper;
 let extendedBoxHelper;
 let boxWithoutPaddingHelper;
 let boxes = [];
-const defaultObj =
-  "https://ins-ai-speech.s3.ap-northeast-2.amazonaws.com/tmp/frame0000.obj";
 
 async function setLibraryFolderAndLoadFiles() {
-  console.log("Button clicked!");
   const directoryPaths = await ipcRenderer.invoke("open-directory-dialog");
   console.log("Directory paths received: ", directoryPaths);
   if (directoryPaths && directoryPaths.length > 0) {
@@ -101,10 +102,8 @@ function loadObjFile(filePath) {
   }
 
   const loader = new OBJLoader();
-  loader.setPath(path.dirname(filePath) + "/"); // set teh filepath
   loader.load(
-    // filePath,
-    path.basename(filePath),
+    filePath,
     async (object) => {
       scene.add(object); // add new obj to the scene
       currentObj = object; // update the reference to the currently displayed obj
@@ -119,8 +118,8 @@ function loadObjFile(filePath) {
 
       Promise.all([
         extractVertexPositions(filePath),
-        getLipIndices("lip_index.txt"),
-        getLipIndices("lip_outline_index.txt"),
+        getLipIndices("public/lip_index.txt"),
+        getLipIndices("public/lip_outline_index.txt"),
       ])
         .then(([vertices, lipIndices, outLip]) => {
           const min = new THREE.Vector3(Infinity, Infinity, Infinity);
@@ -214,7 +213,6 @@ document.getElementById("toggleVertices").addEventListener("click", () => {
 
 document.getElementById("toggleBoundingBox").addEventListener("click", () => {
   show = !show;
-
   boxHelper.visible = show;
   extendedBoxHelper.visible = show;
   boxWithoutPaddingHelper.visible = show;

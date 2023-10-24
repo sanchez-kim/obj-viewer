@@ -16,12 +16,14 @@ const camera = new THREE.PerspectiveCamera(
 );
 
 const renderer = new THREE.WebGLRenderer();
-renderer.setSize(window.innerWidth, window.innerHeight); // set window size
+renderer.setSize(1000, 1000); // set window size
 renderer.setClearColor(0xffffff); // set background color
 document.body.appendChild(renderer.domElement);
 
-camera.position.z = 2; // set camera position
-camera.fov = 36; // lower the size becomes larger
+// camera.position.z = 2; // set camera position
+// camera.fov = 36; // lower the size becomes larger
+camera.position.set(0, 4, 24);
+camera.fov = 80;
 camera.updateProjectionMatrix();
 
 const light = new THREE.DirectionalLight(0xffffff, 2.0);
@@ -111,6 +113,9 @@ function loadObjFile(filePath) {
       object.traverse((child) => {
         if (child instanceof THREE.Mesh) {
           const geometry = child.geometry;
+          const centroid = new THREE.Vector3();
+          geometry.boundingBox.getCenter(centroid);
+          geometry.translate(-centroid.x, -centroid.y, -centroid.z);
           geometry.computeVertexNormals(); // Ensure the vertices are up-to-date
         }
       });

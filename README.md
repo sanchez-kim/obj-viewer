@@ -22,3 +22,4 @@ npm run package
 
 - 커맨드를 실행하면 `release-builds` 폴더 내 `objviewer-win32-x64`가 생성된다.
 - `objviewer.exe`를 실행시키면 된다.
+- 메쉬 표시가 잘 되지 않을경우, canvas size, camera setting 등 조절 필요

@@ -157,7 +157,8 @@ footer {
   bottom: 0;
 }
 
-#selectDirectory {
+#selectDirectory,
+#downloadBtn {
   background-color: #007bff; /* Set the background color */
   color: white; /* Set the text color to white */
   border: none; /* Remove the default border */
@@ -169,13 +170,23 @@ footer {
   outline: none; /* Remove the outline */
 }
 
-#selectDirectory:hover {
+#selectDirectory:hover,
+#downloadBtn:hover {
   background-color: #0056b3; /* Darken the color slightly for a hover effect */
 }
 
-#selectDirectory:active {
+#selectDirectory:active,
+#downloadBtn:active {
   background-color: #004092; /* Darken the color even more when the button is active (clicked) */
 }
 
-.buttonContainer {
+#downloadBtn {
+  margin: 10px;
+}
+
+.canvas_container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }

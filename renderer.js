@@ -20,10 +20,10 @@ renderer.setSize(1000, 1000); // set window size
 renderer.setClearColor(0xffffff); // set background color
 document.body.appendChild(renderer.domElement);
 
-// camera.position.z = 2; // set camera position
-// camera.fov = 36; // lower the size becomes larger
-camera.position.set(0, 4, 24);
-camera.fov = 80;
+camera.position.z = 2; // set camera position
+camera.fov = 36; // lower the size becomes larger
+// camera.position.set(0, 4, 24);
+// camera.fov = 80;
 camera.updateProjectionMatrix();
 
 const light = new THREE.DirectionalLight(0xffffff, 2.0);

@@ -23,9 +23,14 @@ const camera = new THREE.PerspectiveCamera(75, aspectRatio, 0.1, 1000);
 // camera.fov = 18;
 
 // for sample data
-camera.position.set(0, 8, 280);
+// camera.position.set(0, 8, 280);
+// camera.lookAt(0, 0, 0);
+// camera.fov = 6;
+
+camera.position.set(0, -4, 20);
 camera.lookAt(0, 0, 0);
 camera.fov = 10;
+
 camera.updateProjectionMatrix();
 
 const light = new THREE.DirectionalLight(0xffffff, 2.0);
@@ -210,7 +215,7 @@ function loadObjFile(filePath) {
           lipIndices.forEach((index) => {
             if (index >= 0 && index < vertices.length) {
               const vertex = vertices[index];
-              const sphereGeometry = new THREE.SphereGeometry(0.05, 16, 16);
+              const sphereGeometry = new THREE.SphereGeometry(0.003, 16, 16);
               const sphereMaterial = new THREE.MeshBasicMaterial({
                 color: 0xff0000,
               });

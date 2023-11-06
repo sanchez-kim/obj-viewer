@@ -4,6 +4,7 @@ let OBJLoader;
   const module = await import("OBJLoader");
   OBJLoader = module.OBJLoader;
 })();
+
 const { extractVertexPositions, getLipIndices } = require("./utils.js");
 const ipcRenderer = require("electron").ipcRenderer;
 
@@ -29,7 +30,7 @@ const camera = new THREE.PerspectiveCamera(75, aspectRatio, 0.1, 1000);
 
 camera.position.set(0, -4, 20);
 camera.lookAt(0, 0, 0);
-camera.fov = 10;
+camera.fov = 6;
 
 camera.updateProjectionMatrix();
 
@@ -115,16 +116,34 @@ function clearPreviousLip() {
   boxes = [];
 }
 
-function create2DOutlineFromBox3(box, color) {
+function create2DOutlineFromBox3(box, color, camera) {
+  const nearZ = camera.near;
+
+  const minX = box.min.x;
+  const minY = box.min.y;
+  const maxX = box.max.x;
+  const maxY = box.max.y;
   const vertices = [
-    new THREE.Vector3(box.min.x, box.min.y, 0),
-    new THREE.Vector3(box.max.x, box.min.y, 0),
-    new THREE.Vector3(box.max.x, box.max.y, 0),
-    new THREE.Vector3(box.min.x, box.max.y, 0),
+    new THREE.Vector3(minX, minY, nearZ),
+    new THREE.Vector3(maxX, minY, nearZ),
+    new THREE.Vector3(maxX, maxY, nearZ),
+    new THREE.Vector3(minX, maxY, nearZ),
+    new THREE.Vector3(minX, minY, nearZ),
+    new THREE.Vector3(maxX, minY, nearZ),
+    new THREE.Vector3(maxX, maxY, nearZ),
+    new THREE.Vector3(minX, maxY, nearZ),
   ];
 
-  // Connect vertices to form a rectangle
-  const indices = [0, 1, 1, 2, 2, 3, 3, 0];
+  // Project vertices to 2D using the camera
+  vertices.forEach((vertex) => {
+    vertex.project(camera);
+  });
+
+  // Since we're working in Normalized Device Coordinates after projection,
+  // we can discard the z-coordinate and create our 2D line segments in the xy-plane
+  const indices = [
+    0, 1, 1, 2, 2, 3, 3, 0, 4, 5, 5, 6, 6, 7, 7, 4, 0, 4, 1, 5, 2, 6, 3, 7,
+  ];
 
   const geometry = new THREE.BufferGeometry().setFromPoints(vertices);
   geometry.setIndex(indices);
@@ -135,7 +154,7 @@ function create2DOutlineFromBox3(box, color) {
   });
 
   const lineSegments = new THREE.LineSegments(geometry, material);
-  lineSegments.renderOrder = 2; // Ensure it's always rendered on top
+  lineSegments.renderOrder = 2;
 
   return lineSegments;
 }
@@ -187,7 +206,8 @@ function loadObjFile(filePath) {
         }
       });
 
-      scene.add(object); // add new obj to the scene
+      scene.add(object);
+
       currentObj = object; // update the reference to the currently displayed obj
 
       animate();
@@ -237,44 +257,64 @@ function loadObjFile(filePath) {
           // );
           // scene.add(boxWithoutPaddingHelper);
 
-          const horizontal = 8;
-          const vertical = 12;
+          // const horizontal = 100;
+          // const vertical = 80;
 
-          const [minWithPadding, maxWithPadding] = apply2DPadding(
-            min,
-            max,
-            camera,
-            horizontal,
-            vertical,
-            renderer
-          );
+          // const [minWithPadding, maxWithPadding] = apply2DPadding(
+          //   min,
+          //   max,
+          //   camera,
+          //   horizontal,
+          //   vertical,
+          //   renderer
+          // );
 
-          const [extendedMin, extendedMax] = apply2DPadding(
-            minWithPadding,
-            maxWithPadding,
-            camera,
-            horizontal,
-            vertical,
-            renderer
-          );
+          // const [extendedMin, extendedMax] = apply2DPadding(
+          //   minWithPadding,
+          //   maxWithPadding,
+          //   camera,
+          //   horizontal,
+          //   vertical,
+          //   renderer
+          // );
+
+          const paddingForBox = new THREE.Vector3(0.06, 0.1, 0);
+          const minWithPadding = min.clone().sub(paddingForBox);
+          const maxWithPadding = max.clone().add(paddingForBox);
 
           const box = new THREE.Box3(minWithPadding, maxWithPadding);
+          boxHelper = new THREE.Box3Helper(box, 0x33ff45);
+
+          const extendedMin = minWithPadding.clone().sub(paddingForBox);
+          const extendedMax = maxWithPadding.clone().add(paddingForBox);
+
           const extendedBox = new THREE.Box3(extendedMin, extendedMax);
-
-          boxHelper = create2DOutlineFromBox3(box, 0x33ff45);
-          extendedBoxHelper = create2DOutlineFromBox3(extendedBox, 0xff33ce);
-
-          boxHelper.material.depthTest = false;
-          extendedBoxHelper.material.depthTest = false;
-
-          boxHelper.renderOrder = 2;
-          extendedBoxHelper.renderOrder = 2;
+          extendedBoxHelper = new THREE.Box3Helper(extendedBox, 0xff33ce);
 
           scene.add(boxHelper);
           scene.add(extendedBoxHelper);
 
           boxes.push(boxHelper);
           boxes.push(extendedBoxHelper);
+
+          // boxHelper = create2DOutlineFromBox3(box, 0x33ff45, camera);
+          // extendedBoxHelper = create2DOutlineFromBox3(
+          //   extendedBox,
+          //   0xff33ce,
+          //   camera
+          // );
+
+          // boxHelper.material.depthTest = false;
+          // extendedBoxHelper.material.depthTest = false;
+
+          // boxHelper.renderOrder = 2;
+          // extendedBoxHelper.renderOrder = 2;
+
+          // scene.add(boxHelper);
+          // scene.add(extendedBoxHelper);
+
+          // boxes.push(boxHelper);
+          // boxes.push(extendedBoxHelper);
         })
         .catch((error) => {
           console.error("An error occurred: ", error);

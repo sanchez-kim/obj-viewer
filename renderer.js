@@ -134,10 +134,6 @@ function addPixelPadding(box, camera, renderer, pixelPadX, pixelPadY) {
   // Clone the box to avoid modifying the original
   let paddedBox = box.clone();
 
-  // Calculate the size of the box
-  let size = new THREE.Vector3();
-  paddedBox.getSize(size);
-
   // Get the center of the box
   let center = new THREE.Vector3();
   paddedBox.getCenter(center);
@@ -149,36 +145,35 @@ function addPixelPadding(box, camera, renderer, pixelPadX, pixelPadY) {
   let widthHalf = 0.5 * renderer.domElement.clientWidth;
   let heightHalf = 0.5 * renderer.domElement.clientHeight;
 
-  // Convert pixel padding to NDC space (Normalized Device Coordinate)
-  let paddingXNDC = (pixelPadX / widthHalf) * 2;
-  let paddingYNDC = (pixelPadY / heightHalf) * 2;
+  // Convert pixel padding to NDC space (Normalized Device Coordinates)
+  let paddingXNDC = (pixelPadX / renderer.domElement.clientWidth) * 2;
+  let paddingYNDC = (pixelPadY / renderer.domElement.clientHeight) * 2;
 
   // Unproject the corners of the NDC padding box from screen to world space
-  // Create two vectors in screen space for padding, then unproject to get the direction vectors in world space
-  let dirMin = new THREE.Vector3(
+  let paddingMin = new THREE.Vector3(
     centerScreen.x - paddingXNDC,
     centerScreen.y - paddingYNDC,
     centerScreen.z
-  )
-    .unproject(camera)
-    .sub(center)
-    .normalize();
-  let dirMax = new THREE.Vector3(
+  ).unproject(camera);
+  let paddingMax = new THREE.Vector3(
     centerScreen.x + paddingXNDC,
     centerScreen.y + paddingYNDC,
     centerScreen.z
-  )
-    .unproject(camera)
-    .sub(center)
-    .normalize();
+  ).unproject(camera);
 
-  // Calculate the scale at which objects appear to change size with distance from the camera
-  let distance = center.distanceTo(camera.position);
-  let scale = distance * Math.tan((camera.fov * 0.5 * Math.PI) / 180.0);
+  // Calculate padding distance by subtracting center
+  let paddingDistanceMin = paddingMin.sub(center);
+  let paddingDistanceMax = paddingMax.sub(center);
 
-  // Use the direction vectors to determine how far to move the min and max in world space
-  paddedBox.min.addScaledVector(dirMin, scale * pixelPadX);
-  paddedBox.max.addScaledVector(dirMax, scale * pixelPadY);
+  // Ensure padding does not invert the box
+  if (paddingDistanceMin.lengthSq() > 0 && paddingDistanceMax.lengthSq() > 0) {
+    // Add the padding to the box min and max
+    paddedBox.min.add(paddingDistanceMin);
+    paddedBox.max.add(paddingDistanceMax);
+  } else {
+    // Handle potential inversion if necessary
+    console.warn("Padding is causing the box to invert or has no size.");
+  }
 
   return paddedBox;
 }
@@ -218,22 +213,23 @@ function loadObjFile(filePath) {
 
       Promise.all([
         extractVertexPositions(filePath),
-        // getLipIndices("public/lip_index.txt"),
+        getLipIndices("public/lip_index.txt"),
         // getLipIndices("public/lip_index_new.txt"),
 
-        getLipIndicesFromJson(jsonPath)
-          .then((lipIndices) => {
-            return lipIndices;
-          })
-          .catch((error) => {
-            handleError(
-              error,
-              "해당하는 JSON 파일을 찾지못했습니다.\n 파일이 존재하는지 확인하십시오."
-            );
-            throw error;
-          }),
+        // getLipIndicesFromJson(jsonPath)
+        //   .then((lipIndices) => {
+        //     return lipIndices;
+        //   })
+        //   .catch((error) => {
+        //     handleError(
+        //       error,
+        //       "해당하는 JSON 파일을 찾지못했습니다.\n 파일이 존재하는지 확인하십시오."
+        //     );
+        //     throw error;
+        //   }),
 
         getLipIndices("public/lip_outline_index.txt"),
+        // getLipIndices("public/lip_outline_index.txt"),
       ])
         .then(([vertices, lipIndices, outLip]) => {
           // Create a bounding box using the lip outline indices
@@ -250,58 +246,63 @@ function loadObjFile(filePath) {
             }
           });
 
-          // // txt 파일에서 립버텍스 인덱스만 읽어올 경우 처리 방식
-          // lipIndices.forEach((index) => {
-          //   if (index >= 0 && index < vertices.length) {
-          //     const vertex = vertices[index];
-          //     const sphereGeometry = new THREE.SphereGeometry(0.003, 16, 16);
-          //     const sphereMaterial = new THREE.MeshBasicMaterial({
-          //       color: 0xff0000,
-          //     });
-          //     const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-          //     sphere.position.copy(vertex);
-          //     scene.add(sphere);
-          //     spheres.push(sphere);
-          //   } else {
-          //     console.error(`Vertex index ${index} is out of bounds`);
-          //   }
-          // });
-
-          // JSON 파일에서 인덱스 좌표를 불러올 경우 립버텍스 처리 방식
-          Object.keys(lipIndices).forEach((key) => {
-            const vertexArray = lipIndices[key];
-            const vertex = new THREE.Vector3(...vertexArray);
-            const sphereGeometry = new THREE.SphereGeometry(0.003, 16, 16);
-            const sphereMaterial = new THREE.MeshBasicMaterial({
-              color: 0xff0000,
-            });
-            const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-            sphere.position.copy(vertex);
-            scene.add(sphere);
-            spheres.push(sphere);
+          // txt 파일에서 립버텍스 인덱스만 읽어올 경우 처리 방식
+          lipIndices.forEach((index) => {
+            if (index >= 0 && index < vertices.length) {
+              const vertex = vertices[index];
+              const sphereGeometry = new THREE.SphereGeometry(0.003, 16, 16);
+              const sphereMaterial = new THREE.MeshBasicMaterial({
+                color: 0xff0000,
+              });
+              const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+              sphere.position.copy(vertex);
+              scene.add(sphere);
+              spheres.push(sphere);
+            } else {
+              console.error(`Vertex index ${index} is out of bounds`);
+            }
           });
+
+          // // JSON 파일에서 인덱스 좌표를 불러올 경우 립버텍스 처리 방식
+          // Object.keys(lipIndices).forEach((key) => {
+          //   const vertexArray = lipIndices[key];
+          //   const vertex = new THREE.Vector3(...vertexArray);
+          //   const sphereGeometry = new THREE.SphereGeometry(0.003, 16, 16);
+          //   const sphereMaterial = new THREE.MeshBasicMaterial({
+          //     color: 0xff0000,
+          //   });
+          //   const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+          //   sphere.position.copy(vertex);
+          //   scene.add(sphere);
+          //   spheres.push(sphere);
+          // });
           animate();
 
-          const paddingForBox = new THREE.Vector3(0, 0, 0);
+          const box = new THREE.Box3(min, max);
 
-          const minWithPadding = min.clone().sub(paddingForBox);
-          const maxWithPadding = max.clone().add(paddingForBox);
-          const extendedMin = minWithPadding.clone().sub(paddingForBox);
-          const extendedMax = maxWithPadding.clone().add(paddingForBox);
-          const box = new THREE.Box3(minWithPadding, maxWithPadding);
-
-          let paddedBox = addPixelPadding(box.clone(), camera, renderer, 2, 2);
+          let paddedBox = addPixelPadding(
+            box.clone(),
+            camera,
+            renderer,
+            50,
+            40
+          );
+          let paddedBox2 = addPixelPadding(
+            box.clone(),
+            camera,
+            renderer,
+            100,
+            80
+          );
 
           boxHelper = new THREE.Box3Helper(paddedBox, 0x33ff45);
-
-          // const extendedBox = new THREE.Box3(extendedMin, extendedMax);
-          // extendedBoxHelper = new THREE.Box3Helper(extendedBox, 0xff33ce);
+          extendedBoxHelper = new THREE.Box3Helper(paddedBox2, 0xff33ce);
 
           scene.add(boxHelper);
-          // scene.add(extendedBoxHelper);
+          scene.add(extendedBoxHelper);
 
           boxes.push(boxHelper);
-          // boxes.push(extendedBoxHelper);
+          boxes.push(extendedBoxHelper);
         })
         .catch((error) => {
           console.error("An error occurred: ", error);

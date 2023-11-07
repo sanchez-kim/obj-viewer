@@ -57,7 +57,8 @@ function animate() {
 
 let currentObj = null;
 let spheres = [];
-let show = true;
+let showVertex = true;
+let showBox = true;
 let boxHelper;
 let extendedBoxHelper;
 let boxWithoutPaddingHelper;
@@ -108,6 +109,14 @@ function loadObjFilesFromDirectory(directory) {
   });
 }
 
+// return lip indices from json file
+async function getLipIndicesFromJson(jsonPath) {
+  const response = await fetch(jsonPath);
+  const data = await response.json();
+  const lips = data["3d_data"]["lip_vertices"];
+  return lips;
+}
+
 // remove previous lip vertices
 function clearPreviousLip() {
   spheres.forEach((sphere) => scene.remove(sphere));
@@ -116,47 +125,62 @@ function clearPreviousLip() {
   boxes = [];
 }
 
-function create2DOutlineFromBox3(box, color, camera) {
-  const nearZ = camera.near;
+function handleError(error, message) {
+  console.error(message, error);
+  alert(message); // Alert with the provided message
+}
 
-  const minX = box.min.x;
-  const minY = box.min.y;
-  const maxX = box.max.x;
-  const maxY = box.max.y;
-  const vertices = [
-    new THREE.Vector3(minX, minY, nearZ),
-    new THREE.Vector3(maxX, minY, nearZ),
-    new THREE.Vector3(maxX, maxY, nearZ),
-    new THREE.Vector3(minX, maxY, nearZ),
-    new THREE.Vector3(minX, minY, nearZ),
-    new THREE.Vector3(maxX, minY, nearZ),
-    new THREE.Vector3(maxX, maxY, nearZ),
-    new THREE.Vector3(minX, maxY, nearZ),
-  ];
+function addPixelPadding(box, camera, renderer, pixelPadX, pixelPadY) {
+  // Clone the box to avoid modifying the original
+  let paddedBox = box.clone();
 
-  // Project vertices to 2D using the camera
-  vertices.forEach((vertex) => {
-    vertex.project(camera);
-  });
+  // Calculate the size of the box
+  let size = new THREE.Vector3();
+  paddedBox.getSize(size);
 
-  // Since we're working in Normalized Device Coordinates after projection,
-  // we can discard the z-coordinate and create our 2D line segments in the xy-plane
-  const indices = [
-    0, 1, 1, 2, 2, 3, 3, 0, 4, 5, 5, 6, 6, 7, 7, 4, 0, 4, 1, 5, 2, 6, 3, 7,
-  ];
+  // Get the center of the box
+  let center = new THREE.Vector3();
+  paddedBox.getCenter(center);
 
-  const geometry = new THREE.BufferGeometry().setFromPoints(vertices);
-  geometry.setIndex(indices);
+  // Project the center of the box to the screen
+  let centerScreen = center.clone().project(camera);
 
-  const material = new THREE.LineBasicMaterial({
-    color: color,
-    depthTest: false,
-  });
+  // Calculate the dimensions of the renderer's canvas
+  let widthHalf = 0.5 * renderer.domElement.clientWidth;
+  let heightHalf = 0.5 * renderer.domElement.clientHeight;
 
-  const lineSegments = new THREE.LineSegments(geometry, material);
-  lineSegments.renderOrder = 2;
+  // Convert pixel padding to NDC space (Normalized Device Coordinate)
+  let paddingXNDC = (pixelPadX / widthHalf) * 2;
+  let paddingYNDC = (pixelPadY / heightHalf) * 2;
 
-  return lineSegments;
+  // Unproject the corners of the NDC padding box from screen to world space
+  // Create two vectors in screen space for padding, then unproject to get the direction vectors in world space
+  let dirMin = new THREE.Vector3(
+    centerScreen.x - paddingXNDC,
+    centerScreen.y - paddingYNDC,
+    centerScreen.z
+  )
+    .unproject(camera)
+    .sub(center)
+    .normalize();
+  let dirMax = new THREE.Vector3(
+    centerScreen.x + paddingXNDC,
+    centerScreen.y + paddingYNDC,
+    centerScreen.z
+  )
+    .unproject(camera)
+    .sub(center)
+    .normalize();
+
+  // Calculate the scale at which objects appear to change size with distance from the camera
+  let distance = center.distanceTo(camera.position);
+  let scale = distance * Math.tan((camera.fov * 0.5 * Math.PI) / 180.0);
+
+  // Use the direction vectors to determine how far to move the min and max in world space
+  paddedBox.min.addScaledVector(dirMin, scale * pixelPadX);
+  paddedBox.max.addScaledVector(dirMax, scale * pixelPadY);
+
+  return paddedBox;
 }
 
 // removes previous OBJ and load new one
@@ -165,28 +189,6 @@ function loadObjFile(filePath) {
   if (currentObj) {
     scene.remove(currentObj);
     clearPreviousLip();
-  }
-
-  function apply2DPadding(min, max, camera, pixelPadX, pixelPadY, renderer) {
-    // Convert 3D coordinates to 2D
-    const min2D = min.clone().project(camera);
-    const max2D = max.clone().project(camera);
-
-    // Convert pixel padding to NDC space
-    const paddingXInNDC = (pixelPadX / renderer.domElement.width) * 2;
-    const paddingYInNDC = (pixelPadY / renderer.domElement.height) * 2;
-
-    // Apply padding
-    min2D.x -= paddingXInNDC;
-    min2D.y -= paddingYInNDC;
-    max2D.x += paddingXInNDC;
-    max2D.y += paddingYInNDC;
-
-    // Convert back to 3D
-    const paddedMin = min2D.unproject(camera);
-    const paddedMax = max2D.unproject(camera);
-
-    return [paddedMin, paddedMax];
   }
 
   const loader = new OBJLoader();
@@ -212,9 +214,25 @@ function loadObjFile(filePath) {
 
       animate();
 
+      const jsonPath = filePath.replace(".obj", ".json");
+
       Promise.all([
         extractVertexPositions(filePath),
-        getLipIndices("public/lip_index.txt"),
+        // getLipIndices("public/lip_index.txt"),
+        // getLipIndices("public/lip_index_new.txt"),
+
+        getLipIndicesFromJson(jsonPath)
+          .then((lipIndices) => {
+            return lipIndices;
+          })
+          .catch((error) => {
+            handleError(
+              error,
+              "해당하는 JSON 파일을 찾지못했습니다.\n 파일이 존재하는지 확인하십시오."
+            );
+            throw error;
+          }),
+
         getLipIndices("public/lip_outline_index.txt"),
       ])
         .then(([vertices, lipIndices, outLip]) => {
@@ -232,88 +250,57 @@ function loadObjFile(filePath) {
             }
           });
 
-          lipIndices.forEach((index) => {
-            if (index >= 0 && index < vertices.length) {
-              const vertex = vertices[index];
-              const sphereGeometry = new THREE.SphereGeometry(0.003, 16, 16);
-              const sphereMaterial = new THREE.MeshBasicMaterial({
-                color: 0xff0000,
-              });
-              const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-              sphere.position.copy(vertex);
-              scene.add(sphere);
-              spheres.push(sphere);
-            } else {
-              console.error(`Vertex index ${index} is out of bounds`);
-            }
+          // // txt 파일에서 립버텍스 인덱스만 읽어올 경우 처리 방식
+          // lipIndices.forEach((index) => {
+          //   if (index >= 0 && index < vertices.length) {
+          //     const vertex = vertices[index];
+          //     const sphereGeometry = new THREE.SphereGeometry(0.003, 16, 16);
+          //     const sphereMaterial = new THREE.MeshBasicMaterial({
+          //       color: 0xff0000,
+          //     });
+          //     const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+          //     sphere.position.copy(vertex);
+          //     scene.add(sphere);
+          //     spheres.push(sphere);
+          //   } else {
+          //     console.error(`Vertex index ${index} is out of bounds`);
+          //   }
+          // });
+
+          // JSON 파일에서 인덱스 좌표를 불러올 경우 립버텍스 처리 방식
+          Object.keys(lipIndices).forEach((key) => {
+            const vertexArray = lipIndices[key];
+            const vertex = new THREE.Vector3(...vertexArray);
+            const sphereGeometry = new THREE.SphereGeometry(0.003, 16, 16);
+            const sphereMaterial = new THREE.MeshBasicMaterial({
+              color: 0xff0000,
+            });
+            const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+            sphere.position.copy(vertex);
+            scene.add(sphere);
+            spheres.push(sphere);
           });
           animate();
 
-          // // Yellow color for standard box
-          // const boxWithoutPadding = new THREE.Box3(min, max);
-          // boxWithoutPaddingHelper = new THREE.Box3Helper(
-          //   boxWithoutPadding,
-          //   0xffd133
-          // );
-          // scene.add(boxWithoutPaddingHelper);
+          const paddingForBox = new THREE.Vector3(0, 0, 0);
 
-          // const horizontal = 100;
-          // const vertical = 80;
-
-          // const [minWithPadding, maxWithPadding] = apply2DPadding(
-          //   min,
-          //   max,
-          //   camera,
-          //   horizontal,
-          //   vertical,
-          //   renderer
-          // );
-
-          // const [extendedMin, extendedMax] = apply2DPadding(
-          //   minWithPadding,
-          //   maxWithPadding,
-          //   camera,
-          //   horizontal,
-          //   vertical,
-          //   renderer
-          // );
-
-          const paddingForBox = new THREE.Vector3(0.06, 0.1, 0);
           const minWithPadding = min.clone().sub(paddingForBox);
           const maxWithPadding = max.clone().add(paddingForBox);
-
-          const box = new THREE.Box3(minWithPadding, maxWithPadding);
-          boxHelper = new THREE.Box3Helper(box, 0x33ff45);
-
           const extendedMin = minWithPadding.clone().sub(paddingForBox);
           const extendedMax = maxWithPadding.clone().add(paddingForBox);
+          const box = new THREE.Box3(minWithPadding, maxWithPadding);
 
-          const extendedBox = new THREE.Box3(extendedMin, extendedMax);
-          extendedBoxHelper = new THREE.Box3Helper(extendedBox, 0xff33ce);
+          let paddedBox = addPixelPadding(box.clone(), camera, renderer, 2, 2);
+
+          boxHelper = new THREE.Box3Helper(paddedBox, 0x33ff45);
+
+          // const extendedBox = new THREE.Box3(extendedMin, extendedMax);
+          // extendedBoxHelper = new THREE.Box3Helper(extendedBox, 0xff33ce);
 
           scene.add(boxHelper);
-          scene.add(extendedBoxHelper);
-
-          boxes.push(boxHelper);
-          boxes.push(extendedBoxHelper);
-
-          // boxHelper = create2DOutlineFromBox3(box, 0x33ff45, camera);
-          // extendedBoxHelper = create2DOutlineFromBox3(
-          //   extendedBox,
-          //   0xff33ce,
-          //   camera
-          // );
-
-          // boxHelper.material.depthTest = false;
-          // extendedBoxHelper.material.depthTest = false;
-
-          // boxHelper.renderOrder = 2;
-          // extendedBoxHelper.renderOrder = 2;
-
-          // scene.add(boxHelper);
           // scene.add(extendedBoxHelper);
 
-          // boxes.push(boxHelper);
+          boxes.push(boxHelper);
           // boxes.push(extendedBoxHelper);
         })
         .catch((error) => {
@@ -345,15 +332,15 @@ document
   .addEventListener("click", setLibraryFolderAndLoadFiles);
 
 document.getElementById("toggleVertices").addEventListener("click", () => {
-  show = !show;
-  spheres.forEach((sphere) => (sphere.visible = show));
+  showVertex = !showVertex;
+  spheres.forEach((sphere) => (sphere.visible = showVertex));
 });
 
 document.getElementById("toggleBoundingBox").addEventListener("click", () => {
-  show = !show;
-  boxHelper.visible = show;
-  extendedBoxHelper.visible = show;
-  boxWithoutPaddingHelper.visible = show;
+  showBox = !showBox;
+  boxHelper.visible = showBox;
+  extendedBoxHelper.visible = showBox;
+  // boxWithoutPaddingHelper.visible = show;
 });
 
 document.getElementById("downloadBtn").addEventListener("click", function () {

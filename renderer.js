@@ -28,6 +28,7 @@ const camera = new THREE.PerspectiveCamera(75, aspectRatio, 0.1, 1000);
 // camera.lookAt(0, 0, 0);
 // camera.fov = 6;
 
+// latest data
 camera.position.set(0, -4, 20);
 camera.lookAt(0, 0, 0);
 camera.fov = 6;
@@ -132,7 +133,7 @@ function handleError(error, message) {
 
 function addPixelPadding(box, camera, renderer, pixelPadX, pixelPadY) {
   // Clone the box to avoid modifying the original
-  let paddedBox = box.clone();
+  let paddedBox = box;
 
   // Get the center of the box
   let center = new THREE.Vector3();
@@ -197,7 +198,7 @@ function loadObjFile(filePath) {
           const centroid = new THREE.Vector3();
           geometry.boundingBox.getCenter(centroid);
           geometry.translate(-centroid.x, -centroid.y, -centroid.z);
-          geometry.computeVertexNormals(); // Ensure the vertices are up-to-date
+          geometry.computeVertexNormals();
 
           child.renderOrder = 1;
         }
@@ -213,29 +214,30 @@ function loadObjFile(filePath) {
 
       Promise.all([
         extractVertexPositions(filePath),
-        getLipIndices("public/lip_index.txt"),
+        // getLipIndices("public/lip_index.txt"),
         // getLipIndices("public/lip_index_new.txt"),
-
-        // getLipIndicesFromJson(jsonPath)
-        //   .then((lipIndices) => {
-        //     return lipIndices;
-        //   })
-        //   .catch((error) => {
-        //     handleError(
-        //       error,
-        //       "해당하는 JSON 파일을 찾지못했습니다.\n 파일이 존재하는지 확인하십시오."
-        //     );
-        //     throw error;
-        //   }),
+        getLipIndicesFromJson(jsonPath)
+          .then((lipIndices) => {
+            return lipIndices;
+          })
+          .catch((error) => {
+            handleError(
+              error,
+              "해당하는 JSON 파일을 찾지못했습니다.\n 파일이 존재하는지 확인하십시오."
+            );
+            throw error;
+          }),
 
         getLipIndices("public/lip_outline_index.txt"),
-        // getLipIndices("public/lip_outline_index.txt"),
       ])
         .then(([vertices, lipIndices, outLip]) => {
           // Create a bounding box using the lip outline indices
           const min = new THREE.Vector3(Infinity, Infinity, Infinity);
           const max = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
 
+          // 립 주변의 인덱스
+          // 왼쪽위 12974, 오른쪽위 7024, 아래 21433, 왼쪽
+          outLip = [12974, 7024, 21433, 18424, 7007];
           outLip.forEach((index) => {
             if (index >= 0 && index < vertices.length) {
               const vertex = vertices[index];
@@ -246,40 +248,41 @@ function loadObjFile(filePath) {
             }
           });
 
-          // txt 파일에서 립버텍스 인덱스만 읽어올 경우 처리 방식
-          lipIndices.forEach((index) => {
-            if (index >= 0 && index < vertices.length) {
-              const vertex = vertices[index];
-              const sphereGeometry = new THREE.SphereGeometry(0.003, 16, 16);
-              const sphereMaterial = new THREE.MeshBasicMaterial({
-                color: 0xff0000,
-              });
-              const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-              sphere.position.copy(vertex);
-              scene.add(sphere);
-              spheres.push(sphere);
-            } else {
-              console.error(`Vertex index ${index} is out of bounds`);
-            }
-          });
-
-          // // JSON 파일에서 인덱스 좌표를 불러올 경우 립버텍스 처리 방식
-          // Object.keys(lipIndices).forEach((key) => {
-          //   const vertexArray = lipIndices[key];
-          //   const vertex = new THREE.Vector3(...vertexArray);
-          //   const sphereGeometry = new THREE.SphereGeometry(0.003, 16, 16);
-          //   const sphereMaterial = new THREE.MeshBasicMaterial({
-          //     color: 0xff0000,
-          //   });
-          //   const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-          //   sphere.position.copy(vertex);
-          //   scene.add(sphere);
-          //   spheres.push(sphere);
+          // // txt 파일에서 립버텍스 인덱스만 읽어올 경우 처리 방식 -> 요부분은 신경안써도됨
+          // lipIndices.forEach((index) => {
+          //   if (index >= 0 && index < vertices.length) {
+          //     const vertex = vertices[index];
+          //     const sphereGeometry = new THREE.SphereGeometry(0.003, 16, 16);
+          //     const sphereMaterial = new THREE.MeshBasicMaterial({
+          //       color: 0xff0000,
+          //     });
+          //     const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+          //     sphere.position.copy(vertex);
+          //     scene.add(sphere);
+          //     spheres.push(sphere);
+          //   } else {
+          //     console.error(`Vertex index ${index} is out of bounds`);
+          //   }
           // });
+
+          // JSON 파일에서 인덱스 좌표를 불러올 경우 립버텍스 처리 방식
+          Object.keys(lipIndices).forEach((key) => {
+            const vertexArray = lipIndices[key];
+            const vertex = new THREE.Vector3(...vertexArray);
+            const sphereGeometry = new THREE.SphereGeometry(0.003, 16, 16); // 립버텍스 점 크기가 넘무 작으면 이것을 조절
+            const sphereMaterial = new THREE.MeshBasicMaterial({
+              color: 0xff0000, // 점 색깔
+            });
+            const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+            sphere.position.copy(vertex);
+            scene.add(sphere);
+            spheres.push(sphere);
+          });
           animate();
 
           const box = new THREE.Box3(min, max);
 
+          // 바운딩 박스 패딩 설정
           let paddedBox = addPixelPadding(
             box.clone(),
             camera,
@@ -341,7 +344,6 @@ document.getElementById("toggleBoundingBox").addEventListener("click", () => {
   showBox = !showBox;
   boxHelper.visible = showBox;
   extendedBoxHelper.visible = showBox;
-  // boxWithoutPaddingHelper.visible = show;
 });
 
 document.getElementById("downloadBtn").addEventListener("click", function () {

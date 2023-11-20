@@ -6,6 +6,8 @@ release-builds
 
 # temp
 .vscode
+samples
+notebooks
 
 # Local Netlify folder
 .netlify

@@ -9,7 +9,6 @@ const {
   extractVertexPositions,
   getLipIndices,
   getLipIndicesFromJson,
-  clearPreviousLip,
   handleError,
   addPixelPadding,
 } = require("./utils.js");
@@ -26,9 +25,8 @@ renderer.setSize(canvas.width, canvas.height); // set window size
 renderer.setClearColor(0xffffff); // set background color
 
 // camera info
-const camera = new THREE.PerspectiveCamera(75, aspectRatio, 0.1, 1000);
-camera.position.set(0, -0.5, 15);
-camera.fov = 8;
+let camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 1000);
+camera.position.set(0, -0.5, 5);
 camera.updateProjectionMatrix();
 
 // lighting option
@@ -46,7 +44,7 @@ window.addEventListener("resize", function () {
   renderer.setSize(canvas.width, canvas.height);
 
   // Resize overlay canvas
-  const overlayCanvas = document.getElementById('overlay_canvas');
+  const overlayCanvas = document.getElementById("overlay_canvas");
   overlayCanvas.width = canvas.width;
   overlayCanvas.height = canvas.height;
 });
@@ -54,10 +52,6 @@ window.addEventListener("resize", function () {
 function animate() {
   requestAnimationFrame(animate);
   renderer.render(scene, camera);
-
-  if (currentObj && showBox) {
-    drawBoundingBoxes(currentObj, camera, renderer);
-  }
 
   if (captureNextFrame) {
     captureImage();
@@ -74,6 +68,14 @@ let extendedBoxHelper;
 let boxes = [];
 let captureNextFrame = false;
 
+// remove previous lip vertices
+function clearPreviousLip(spheres, boxes) {
+  spheres.forEach((sphere) => scene.remove(sphere));
+  boxes.forEach((box) => scene.remove(box));
+  spheres = [];
+  boxes = [];
+}
+
 async function setLibraryFolderAndLoadFiles() {
   const directoryPaths = await ipcRenderer.invoke("open-directory-dialog");
   console.log("Directory paths received: ", directoryPaths);
@@ -83,42 +85,66 @@ async function setLibraryFolderAndLoadFiles() {
   }
 }
 
-function drawBoundingBoxes(obj, camera, renderer) {
-  const screenPosition = toScreenPosition(obj, camera, renderer);
+// TODO: fix the projection problem
+// when projecting 3d to 2d, the box is off the lip outline
+function drawBoundingBoxes(
+  paddedBox,
+  camera,
+  renderer,
+  padX,
+  padY,
+  color = "red"
+) {
+  const screenPosition = toScreenPosition(
+    paddedBox,
+    camera,
+    renderer,
+    padX,
+    padY
+  );
 
-  const overlayCanvas = document.getElementById('overlay_canvas');
-  const ctx = overlayCanvas.getContext('2d');
+  const overlayCanvas = document.getElementById("overlay_canvas");
+  const ctx = overlayCanvas.getContext("2d");
   ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-  ctx.strokeStyle = 'red';
-  ctx.strokeRect(screenPosition.x, screenPosition.y, screenPosition.width, screenPosition.height);
+  ctx.strokeStyle = color;
+  ctx.strokeRect(
+    screenPosition.x,
+    screenPosition.y,
+    screenPosition.width,
+    screenPosition.height
+  );
 }
 
-function toScreenPosition(obj, camera, renderer) {
-  const vector = new THREE.Vector3();
+function toScreenPosition(box, camera, renderer, pixelPadX, pixelPadY) {
+  if (!box || !box.min || !box.max) {
+    console.error("Invalid bounding box provided to toScreenPosition");
+    return;
+  }
 
-  // Get the bounding box of the object
-  const box = new THREE.Box3().setFromObject(obj);
-  const size = new THREE.Vector3();
-  box.getSize(size);
+  // Calculate the factors to convert from NDC to screen space
+  const halfWidth = renderer.domElement.width / 2;
+  const halfHeight = renderer.domElement.height / 2;
 
-  // Get the center of the bounding box
-  box.getCenter(vector);
+  // Convert the 3D box min and max into NDC
+  const minNDC = box.min.clone().project(camera);
+  const maxNDC = box.max.clone().project(camera);
 
-  // Project the center point to 2D
-  vector.project(camera);
-
-  // Convert from normalized device coordinates (NDC) to screen space
-  vector.x = Math.round((0.5 + vector.x / 2) * renderer.domElement.width);
-  vector.y = Math.round((0.5 - vector.y / 2) * renderer.domElement.height);
-
-  return {
-      x: vector.x - size.x / 2,
-      y: vector.y - size.y / 2,
-      width: size.x,
-      height: size.y
+  // Convert from NDC to screen space
+  let pos = {
+    x: (minNDC.x + 1) * halfWidth,
+    y: (-maxNDC.y + 1) * halfHeight,
+    width: (maxNDC.x - minNDC.x) * halfWidth,
+    height: (maxNDC.y - minNDC.y) * halfHeight,
   };
-}
 
+  // Apply pixel padding
+  pos.x -= pixelPadX / 2;
+  pos.y -= pixelPadY / 2;
+  pos.width += pixelPadX;
+  pos.height += pixelPadY;
+
+  return pos;
+}
 
 function loadObjFilesFromDirectory(directory) {
   const fs = require("fs");
@@ -157,7 +183,6 @@ function loadObjFilesFromDirectory(directory) {
 
 // removes previous OBJ and load new one
 function loadObjFile(filePath) {
-  console.log(filePath);
   if (currentObj) {
     scene.remove(currentObj);
     clearPreviousLip(spheres, boxes);
@@ -247,6 +272,7 @@ function loadObjFile(filePath) {
             50,
             40
           );
+
           let paddedBox2 = addPixelPadding(
             box.clone(),
             camera,
@@ -254,6 +280,8 @@ function loadObjFile(filePath) {
             100,
             80
           );
+
+          // drawBoundingBoxes(box.clone(), camera, renderer, 0, 0, "blue");
 
           boxHelper = new THREE.Box3Helper(paddedBox, 0x33ff45);
           extendedBoxHelper = new THREE.Box3Helper(paddedBox2, 0xff33ce);

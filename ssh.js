@@ -109,7 +109,7 @@ function createSSHConnection() {
 async function getFilePairs(sftp) {
   let allPairs = [];
 
-  for (let sentenceNumber = 2501; sentenceNumber <= 3000; sentenceNumber++) {
+  for (let sentenceNumber = 2501; sentenceNumber <= 2502; sentenceNumber++) {
     let sentenceDir = `${baseDir}sentence${sentenceNumber}/`;
     const objDirectory = sentenceDir + "3Dmesh";
     const jsonDirectory = sentenceDir + "Meta";

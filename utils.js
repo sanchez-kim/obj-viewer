@@ -37,22 +37,14 @@ async function getLipIndicesFromJson(jsonPath) {
   return lips;
 }
 
-// remove previous lip vertices
-function clearPreviousLip(spheres, boxes) {
-  spheres.forEach((sphere) => scene.remove(sphere));
-  boxes.forEach((box) => scene.remove(box));
-  spheres = [];
-  boxes = [];
-}
-
 function handleError(error, message) {
   console.error(message, error);
   alert(message); // Alert with the provided message
 }
 
-function addPixelPadding(box, camera, renderer, pixelPadX, pixelPadY) {
-  // Clone the box to avoid modifying the original
-  let paddedBox = box;
+function addPixelPadding(originalBox, camera, renderer, pixelPadX, pixelPadY) {
+  // Properly clone the box to avoid modifying the original
+  let paddedBox = originalBox.clone();
 
   // Get the center of the box
   let center = new THREE.Vector3();
@@ -60,10 +52,6 @@ function addPixelPadding(box, camera, renderer, pixelPadX, pixelPadY) {
 
   // Project the center of the box to the screen
   let centerScreen = center.clone().project(camera);
-
-  // Calculate the dimensions of the renderer's canvas
-  let widthHalf = 0.5 * renderer.domElement.clientWidth;
-  let heightHalf = 0.5 * renderer.domElement.clientHeight;
 
   // Convert pixel padding to NDC space (Normalized Device Coordinates)
   let paddingXNDC = (pixelPadX / renderer.domElement.clientWidth) * 2;
@@ -87,27 +75,19 @@ function addPixelPadding(box, camera, renderer, pixelPadX, pixelPadY) {
 
   // Ensure padding does not invert the box
   if (paddingDistanceMin.lengthSq() > 0 && paddingDistanceMax.lengthSq() > 0) {
-    // Add the padding to the box min and max
+    // Expand the box by the padding vectors
     paddedBox.min.add(paddingDistanceMin);
     paddedBox.max.add(paddingDistanceMax);
+
+    // Additional check to ensure the box has not been inverted
+    if (paddedBox.isEmpty()) {
+      console.warn("Padded box is empty or inverted.");
+      return paddedBox; // Return the original box in case of an issue
+    }
   } else {
-    // Handle potential inversion if necessary
     console.warn("Padding is causing the box to invert or has no size.");
+    return paddedBox;
   }
-
-  return paddedBox;
-}
-
-function addPixelPaddingNoCam(box, paddingX, paddingY, paddingZ) {
-  // Clone the box to avoid modifying the original
-  let paddedBox = box.clone();
-
-  // Calculate padding in world space
-  let paddingVector = new THREE.Vector3(paddingX, paddingY, paddingZ);
-
-  // Add the padding to the box min and max
-  paddedBox.min.sub(paddingVector);
-  paddedBox.max.add(paddingVector);
 
   return paddedBox;
 }
@@ -116,8 +96,6 @@ module.exports = {
   extractVertexPositions,
   getLipIndices,
   getLipIndicesFromJson,
-  clearPreviousLip,
   handleError,
   addPixelPadding,
-  addPixelPaddingNoCam,
 };

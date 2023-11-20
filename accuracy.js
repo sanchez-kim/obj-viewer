@@ -164,7 +164,7 @@ function checkVertices(
   };
 }
 
-const lastProcessedFileName = "M06_S2577_F113.obj";
+const lastProcessedFileName = "M06_S2501_F000.obj";
 
 // Main execution flow
 async function main() {

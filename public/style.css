@@ -189,4 +189,12 @@ footer {
   flex-direction: column;
   justify-content: center;
   align-items: center;
+  position: relative
 }
+
+#overlay_canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+

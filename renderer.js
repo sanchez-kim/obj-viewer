@@ -5,7 +5,14 @@ let OBJLoader;
   OBJLoader = module.OBJLoader;
 })();
 
-const { extractVertexPositions, getLipIndices } = require("./utils.js");
+const {
+  extractVertexPositions,
+  getLipIndices,
+  getLipIndicesFromJson,
+  clearPreviousLip,
+  handleError,
+  addPixelPadding,
+} = require("./utils.js");
 const ipcRenderer = require("electron").ipcRenderer;
 
 const scene = new THREE.Scene();
@@ -18,37 +25,39 @@ const renderer = new THREE.WebGLRenderer({
 renderer.setSize(canvas.width, canvas.height); // set window size
 renderer.setClearColor(0xffffff); // set background color
 
+// camera info
 const camera = new THREE.PerspectiveCamera(75, aspectRatio, 0.1, 1000);
-// for real data
-// camera.position.set(0, 155, 100);
-// camera.fov = 18;
-
-// for sample data
-// camera.position.set(0, 8, 280);
-// camera.lookAt(0, 0, 0);
-// camera.fov = 6;
-
-// latest data
-camera.position.set(0, -4, 20);
-camera.lookAt(0, 0, 0);
-camera.fov = 6;
-
+camera.position.set(0, -0.5, 15);
+camera.fov = 8;
 camera.updateProjectionMatrix();
 
-const light = new THREE.DirectionalLight(0xffffff, 2.0);
-light.position.set(1, 1, 1).normalize();
+// lighting option
+const light = new THREE.DirectionalLight(0xffffff, 1.0);
+light.position.set(0, 0, 1);
 scene.add(light);
+
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.05);
+scene.add(ambientLight);
 
 window.addEventListener("resize", function () {
   const newAspectRatio = canvas.width / canvas.height;
   camera.aspect = newAspectRatio;
   camera.updateProjectionMatrix();
   renderer.setSize(canvas.width, canvas.height);
+
+  // Resize overlay canvas
+  const overlayCanvas = document.getElementById('overlay_canvas');
+  overlayCanvas.width = canvas.width;
+  overlayCanvas.height = canvas.height;
 });
 
 function animate() {
   requestAnimationFrame(animate);
   renderer.render(scene, camera);
+
+  if (currentObj && showBox) {
+    drawBoundingBoxes(currentObj, camera, renderer);
+  }
 
   if (captureNextFrame) {
     captureImage();
@@ -62,7 +71,6 @@ let showVertex = true;
 let showBox = true;
 let boxHelper;
 let extendedBoxHelper;
-let boxWithoutPaddingHelper;
 let boxes = [];
 let captureNextFrame = false;
 
@@ -74,6 +82,43 @@ async function setLibraryFolderAndLoadFiles() {
     loadObjFilesFromDirectory(selectedDirectory);
   }
 }
+
+function drawBoundingBoxes(obj, camera, renderer) {
+  const screenPosition = toScreenPosition(obj, camera, renderer);
+
+  const overlayCanvas = document.getElementById('overlay_canvas');
+  const ctx = overlayCanvas.getContext('2d');
+  ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+  ctx.strokeStyle = 'red';
+  ctx.strokeRect(screenPosition.x, screenPosition.y, screenPosition.width, screenPosition.height);
+}
+
+function toScreenPosition(obj, camera, renderer) {
+  const vector = new THREE.Vector3();
+
+  // Get the bounding box of the object
+  const box = new THREE.Box3().setFromObject(obj);
+  const size = new THREE.Vector3();
+  box.getSize(size);
+
+  // Get the center of the bounding box
+  box.getCenter(vector);
+
+  // Project the center point to 2D
+  vector.project(camera);
+
+  // Convert from normalized device coordinates (NDC) to screen space
+  vector.x = Math.round((0.5 + vector.x / 2) * renderer.domElement.width);
+  vector.y = Math.round((0.5 - vector.y / 2) * renderer.domElement.height);
+
+  return {
+      x: vector.x - size.x / 2,
+      y: vector.y - size.y / 2,
+      width: size.x,
+      height: size.y
+  };
+}
+
 
 function loadObjFilesFromDirectory(directory) {
   const fs = require("fs");
@@ -110,81 +155,16 @@ function loadObjFilesFromDirectory(directory) {
   });
 }
 
-// return lip indices from json file
-async function getLipIndicesFromJson(jsonPath) {
-  const response = await fetch(jsonPath);
-  const data = await response.json();
-  const lips = data["3d_data"]["lip_vertices"];
-  return lips;
-}
-
-// remove previous lip vertices
-function clearPreviousLip() {
-  spheres.forEach((sphere) => scene.remove(sphere));
-  boxes.forEach((box) => scene.remove(box));
-  spheres = [];
-  boxes = [];
-}
-
-function handleError(error, message) {
-  console.error(message, error);
-  alert(message); // Alert with the provided message
-}
-
-function addPixelPadding(box, camera, renderer, pixelPadX, pixelPadY) {
-  // Clone the box to avoid modifying the original
-  let paddedBox = box;
-
-  // Get the center of the box
-  let center = new THREE.Vector3();
-  paddedBox.getCenter(center);
-
-  // Project the center of the box to the screen
-  let centerScreen = center.clone().project(camera);
-
-  // Calculate the dimensions of the renderer's canvas
-  let widthHalf = 0.5 * renderer.domElement.clientWidth;
-  let heightHalf = 0.5 * renderer.domElement.clientHeight;
-
-  // Convert pixel padding to NDC space (Normalized Device Coordinates)
-  let paddingXNDC = (pixelPadX / renderer.domElement.clientWidth) * 2;
-  let paddingYNDC = (pixelPadY / renderer.domElement.clientHeight) * 2;
-
-  // Unproject the corners of the NDC padding box from screen to world space
-  let paddingMin = new THREE.Vector3(
-    centerScreen.x - paddingXNDC,
-    centerScreen.y - paddingYNDC,
-    centerScreen.z
-  ).unproject(camera);
-  let paddingMax = new THREE.Vector3(
-    centerScreen.x + paddingXNDC,
-    centerScreen.y + paddingYNDC,
-    centerScreen.z
-  ).unproject(camera);
-
-  // Calculate padding distance by subtracting center
-  let paddingDistanceMin = paddingMin.sub(center);
-  let paddingDistanceMax = paddingMax.sub(center);
-
-  // Ensure padding does not invert the box
-  if (paddingDistanceMin.lengthSq() > 0 && paddingDistanceMax.lengthSq() > 0) {
-    // Add the padding to the box min and max
-    paddedBox.min.add(paddingDistanceMin);
-    paddedBox.max.add(paddingDistanceMax);
-  } else {
-    // Handle potential inversion if necessary
-    console.warn("Padding is causing the box to invert or has no size.");
-  }
-
-  return paddedBox;
-}
-
 // removes previous OBJ and load new one
 function loadObjFile(filePath) {
   console.log(filePath);
   if (currentObj) {
     scene.remove(currentObj);
-    clearPreviousLip();
+    clearPreviousLip(spheres, boxes);
+
+    // Hide the bounding box
+    if (boxHelper) boxHelper.visible = false;
+    if (extendedBoxHelper) extendedBoxHelper.visible = false;
   }
 
   const loader = new OBJLoader();
@@ -214,8 +194,6 @@ function loadObjFile(filePath) {
 
       Promise.all([
         extractVertexPositions(filePath),
-        // getLipIndices("public/lip_index.txt"),
-        // getLipIndices("public/lip_index_new.txt"),
         getLipIndicesFromJson(jsonPath)
           .then((lipIndices) => {
             return lipIndices;
@@ -227,7 +205,6 @@ function loadObjFile(filePath) {
             );
             throw error;
           }),
-
         getLipIndices("public/lip_outline_index.txt"),
       ])
         .then(([vertices, lipIndices, outLip]) => {
@@ -235,9 +212,6 @@ function loadObjFile(filePath) {
           const min = new THREE.Vector3(Infinity, Infinity, Infinity);
           const max = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
 
-          // 립 주변의 인덱스
-          // 왼쪽위 12974, 오른쪽위 7024, 아래 21433, 왼쪽
-          outLip = [12974, 7024, 21433, 18424, 7007];
           outLip.forEach((index) => {
             if (index >= 0 && index < vertices.length) {
               const vertex = vertices[index];
@@ -247,23 +221,6 @@ function loadObjFile(filePath) {
               console.error(`Vertex index ${index} is out of bounds`);
             }
           });
-
-          // // txt 파일에서 립버텍스 인덱스만 읽어올 경우 처리 방식 -> 요부분은 신경안써도됨
-          // lipIndices.forEach((index) => {
-          //   if (index >= 0 && index < vertices.length) {
-          //     const vertex = vertices[index];
-          //     const sphereGeometry = new THREE.SphereGeometry(0.003, 16, 16);
-          //     const sphereMaterial = new THREE.MeshBasicMaterial({
-          //       color: 0xff0000,
-          //     });
-          //     const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-          //     sphere.position.copy(vertex);
-          //     scene.add(sphere);
-          //     spheres.push(sphere);
-          //   } else {
-          //     console.error(`Vertex index ${index} is out of bounds`);
-          //   }
-          // });
 
           // JSON 파일에서 인덱스 좌표를 불러올 경우 립버텍스 처리 방식
           Object.keys(lipIndices).forEach((key) => {

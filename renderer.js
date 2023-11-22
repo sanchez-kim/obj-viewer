@@ -1,18 +1,13 @@
-const THREE = require("three");
-let OBJLoader;
-(async function () {
-  const module = await import("OBJLoader");
-  OBJLoader = module.OBJLoader;
-})();
+import * as THREE from "three";
+import { OBJLoader } from "OBJLoader";
 
-const {
+import {
   extractVertexPositions,
   getLipIndices,
   getLipIndicesFromJson,
   handleError,
   addPixelPadding,
-} = require("./utils.js");
-const ipcRenderer = require("electron").ipcRenderer;
+} from "./utils.js";
 
 const scene = new THREE.Scene();
 const canvas = document.getElementById("webgl_canvas");
@@ -25,12 +20,16 @@ renderer.setSize(canvas.width, canvas.height); // set window size
 renderer.setClearColor(0xffffff); // set background color
 
 // camera info
-let camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 1000);
-camera.position.set(0, -0.5, 5);
+const camera = new THREE.PerspectiveCamera(75, aspectRatio, 0.1, 1000);
+camera.position.set(0, -0.4, 18);
+camera.fov = 8;
 camera.updateProjectionMatrix();
+// let camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 1000);
+// camera.position.set(0, -0.5, 5);
+// camera.updateProjectionMatrix();
 
 // lighting option
-const light = new THREE.DirectionalLight(0xffffff, 1.0);
+const light = new THREE.DirectionalLight(0xffffff, 2.0);
 light.position.set(0, 0, 1);
 scene.add(light);
 
@@ -77,11 +76,12 @@ function clearPreviousLip(spheres, boxes) {
 }
 
 async function setLibraryFolderAndLoadFiles() {
-  const directoryPaths = await ipcRenderer.invoke("open-directory-dialog");
-  console.log("Directory paths received: ", directoryPaths);
+  const directoryPaths = await window.electronAPI.invoke(
+    "open-directory-dialog"
+  );
   if (directoryPaths && directoryPaths.length > 0) {
     const selectedDirectory = directoryPaths[0];
-    loadObjFilesFromDirectory(selectedDirectory);
+    await loadObjFilesFromDirectory(selectedDirectory);
   }
 }
 
@@ -146,43 +146,53 @@ function toScreenPosition(box, camera, renderer, pixelPadX, pixelPadY) {
   return pos;
 }
 
-function loadObjFilesFromDirectory(directory) {
-  const fs = require("fs");
-  const path = require("path");
+function selectFile(fileItem, filePath) {
+  const fileList = document.getElementById("fileList");
+  Array.from(fileList.children).forEach((child) => {
+    child.classList.remove("selected");
+  });
+  fileItem.classList.add("selected");
+  loadTexture(filePath);
+}
 
-  fs.readdir(directory, (err, files) => {
-    if (err) {
-      console.error("Error reading directory:", err);
-      return;
-    }
-
-    const objFiles = files.filter(
-      (file) => path.extname(file).toLowerCase() === ".obj"
-    );
+async function loadObjFilesFromDirectory(directory) {
+  try {
+    const fullPaths = await window.electronAPI.loadObjFiles(directory);
 
     const fileList = document.getElementById("fileList");
     fileList.innerHTML = ""; // Clear the previous file list
 
-    objFiles.forEach((objFile) => {
-      const filePath = path.join(directory, objFile);
+    fullPaths.forEach((fullPath) => {
+      // Extract file name from the full path
+      const fileName = fullPath.split("/").pop();
 
       const fileItem = document.createElement("div");
-      fileItem.textContent = objFile;
-      fileItem.addEventListener("click", () => {
-        Array.from(fileList.children).forEach((child) => {
-          child.classList.remove("selected");
-        });
-        fileItem.classList.add("selected");
-        loadObjFile(filePath); // Now loading from local directory
-      });
-
+      fileItem.textContent = fileName;
+      fileItem.addEventListener("click", () => selectFile(fileItem, fullPath));
       fileList.appendChild(fileItem);
     });
-  });
+  } catch (error) {
+    console.error("Error loading OBJ files from directory", error);
+  }
+}
+
+async function loadTexture(filePath) {
+  const textureLoader = new THREE.TextureLoader();
+
+  textureLoader.load(
+    "samples/M05.png",
+    (textureImage) => {
+      loadObjFile(filePath, textureImage);
+    },
+    undefined,
+    (error) => {
+      console.error("An error occurred loading the texture", error);
+    }
+  );
 }
 
 // removes previous OBJ and load new one
-function loadObjFile(filePath) {
+function loadObjFile(filePath, texture) {
   if (currentObj) {
     scene.remove(currentObj);
     clearPreviousLip(spheres, boxes);
@@ -191,24 +201,23 @@ function loadObjFile(filePath) {
     if (boxHelper) boxHelper.visible = false;
     if (extendedBoxHelper) extendedBoxHelper.visible = false;
   }
-
   const loader = new OBJLoader();
+
   loader.load(
     filePath,
     async (object) => {
       object.traverse((child) => {
         if (child instanceof THREE.Mesh) {
+          // child.material = new THREE.MeshStandardMaterial(
+          //   { map: texture }
+          // );
+
           const geometry = child.geometry;
           geometry.computeBoundingBox();
           const centroid = new THREE.Vector3();
           geometry.boundingBox.getCenter(centroid);
-          geometry.translate(-centroid.x, -centroid.y, -centroid.z);
-          geometry.computeVertexNormals();
-
-          child.renderOrder = 1;
         }
       });
-
       scene.add(object);
 
       currentObj = object; // update the reference to the currently displayed obj
@@ -316,21 +325,23 @@ function captureImage() {
   tempLink.click();
 }
 
-document
-  .getElementById("selectDirectory")
-  .addEventListener("click", setLibraryFolderAndLoadFiles);
+document.addEventListener("DOMContentLoaded", () => {
+  document
+    .getElementById("selectDirectory")
+    .addEventListener("click", setLibraryFolderAndLoadFiles);
 
-document.getElementById("toggleVertices").addEventListener("click", () => {
-  showVertex = !showVertex;
-  spheres.forEach((sphere) => (sphere.visible = showVertex));
-});
+  document.getElementById("toggleVertices").addEventListener("click", () => {
+    showVertex = !showVertex;
+    spheres.forEach((sphere) => (sphere.visible = showVertex));
+  });
 
-document.getElementById("toggleBoundingBox").addEventListener("click", () => {
-  showBox = !showBox;
-  boxHelper.visible = showBox;
-  extendedBoxHelper.visible = showBox;
-});
+  document.getElementById("toggleBoundingBox").addEventListener("click", () => {
+    showBox = !showBox;
+    boxHelper.visible = showBox;
+    extendedBoxHelper.visible = showBox;
+  });
 
-document.getElementById("downloadBtn").addEventListener("click", function () {
-  captureNextFrame = true;
+  document.getElementById("downloadBtn").addEventListener("click", function () {
+    captureNextFrame = true;
+  });
 });

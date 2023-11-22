@@ -7,37 +7,73 @@ async function loadOBJLoader() {
   }
   return objLoader;
 }
-const { addPixelPaddingNoCam } = require("./utils.js");
-const { createSSHConnection, getFilePairs } = require("./ssh.js");
-
 const fs = require("fs");
 const path = require("path");
+const axios = require("axios");
 const { logger } = require("./logger");
 
-async function fetchFileContent(sftp, filePath) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    sftp
-      .createReadStream(filePath)
-      .on("data", (chunk) => chunks.push(chunk))
-      .on("end", () => resolve(Buffer.concat(chunks).toString("utf8")))
-      .on("error", reject);
-  });
+async function getLipIndices(filePath) {
+  try {
+    const response = await fetch(filePath);
+    if (!response.ok) {
+      throw new Error("Network response was not ok " + response.statusText);
+    }
+    const text = await response.text();
+    return text.trim().split(",").map(Number);
+  } catch (error) {
+    console.error("There has been a problem", error);
+  }
 }
 
-async function processFilePairs(sftp, pair) {
+function addPixelPaddingNoCam(box, paddingX, paddingY, paddingZ) {
+  // Clone the box to avoid modifying the original
+  let paddedBox = box.clone();
+
+  // Calculate padding in world space
+  let paddingVector = new THREE.Vector3(paddingX, paddingY, paddingZ);
+
+  // Add the padding to the box min and max
+  paddedBox.min.sub(paddingVector);
+  paddedBox.max.add(paddingVector);
+
+  return paddedBox;
+}
+
+// Function to generate S3 URLs with proper zero-padding
+function generateS3Url(modelNum, sentenceNum, frameNum, fileType) {
+  const modelStr = modelNum.toString().padStart(2, "0");
+  const sentenceStr = sentenceNum.toString().padStart(4, "0");
+  const frameStr = frameNum.toString().padStart(3, "0");
+
+  return `https://ins-ai-speech.s3.ap-northeast-2.amazonaws.com/prod/v2/M${modelStr}/S${sentenceStr}/F${frameStr}/M${modelStr}_S${sentenceStr}_F${frameStr}.${fileType}`;
+}
+
+async function fetchFileFromS3(url) {
   try {
-    const objContent = await fetchFileContent(sftp, pair.objFile);
-    const jsonContent = await fetchFileContent(sftp, pair.jsonFile);
+    const response = await axios.get(url);
+    return response.data;
+  } catch (error) {
+    console.error(`Error fetching file from S3: ${error}`);
+    throw error;
+  }
+}
+
+async function processFilePairs(objUrl, jsonUrl) {
+  let objFileName;
+  let jsonFileName;
+  try {
+    const objContent = await fetchFileFromS3(objUrl);
+    const jsonContent = await fetchFileFromS3(jsonUrl);
     const result = await loadFiles(objContent, jsonContent);
 
-    const objFileName = path.basename(pair.objFile);
-    const jsonFileName = path.basename(pair.jsonFile);
+    objFileName = path.basename(objUrl);
+    jsonFileName = path.basename(jsonUrl);
 
     if (!result) {
       logger(`Skipping pair due to error: ${objFileName}, ${jsonFileName}`);
       return { passed: false };
     }
+
     const { passed, details } = checkVertices(
       result.lipIndices,
       result.lipMask1,
@@ -45,17 +81,17 @@ async function processFilePairs(sftp, pair) {
       objFileName,
       jsonFileName
     );
+
     if (!passed) {
       logger(
         `Vertices outside masks for pair: ${objFileName}, ${jsonFileName}`
       );
     }
+
     return { passed };
   } catch (error) {
     logger(
-      `Error processing file pair: ${path.basename(
-        pair.objFile
-      )}, ${path.basename(pair.jsonFile)} - ${error}`
+      `Error processing file pair: ${objFileName}, ${jsonFileName} - ${error}`
     );
     return { passed: false };
   }
@@ -164,35 +200,29 @@ function checkVertices(
   };
 }
 
-const lastProcessedFileName = "M06_S2501_F000.obj";
+const lastProcessedFileName = "";
 
-// Main execution flow
 async function main() {
-  let sshClient;
+  const modelNum = 7;
   try {
-    const connection = await createSSHConnection();
-    sshClient = connection.sshClient;
-    const sftp = connection.sftp;
+    for (let sentenceNum = 3001; sentenceNum <= 3500; sentenceNum++) {
+      for (let frameNum = 0; frameNum <= 300; frameNum++) {
+        const objUrl = generateS3Url(modelNum, sentenceNum, frameNum, "obj");
+        const jsonUrl = generateS3Url(modelNum, sentenceNum, frameNum, "json");
 
-    const pairs = await getFilePairs(sftp);
-    let resumeProcessing = false;
+        console.log(objUrl, jsonUrl);
 
-    for (const pair of pairs) {
-      const currentFileName = path.basename(pair.objFile);
-      if (!resumeProcessing) {
+        const currentFileName = path.basename(objUrl);
         if (currentFileName === lastProcessedFileName) {
-          resumeProcessing = true;
+          // Start processing from this file
+          await processFilePairs(objUrl, jsonUrl);
+        } else if (!lastProcessedFileName) {
+          await processFilePairs(objUrl, jsonUrl);
         }
-        continue;
       }
-      await processFilePairs(sftp, pair);
     }
-    sshClient.end();
   } catch (error) {
     logger(`Error in main: ${error}`);
-    if (sshClient) {
-      sshClient.end();
-    }
   }
 }
 

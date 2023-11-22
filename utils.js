@@ -1,4 +1,4 @@
-const THREE = require("three");
+import * as THREE from "three";
 
 async function extractVertexPositions(filePath) {
   const response = await fetch(filePath);
@@ -92,10 +92,25 @@ function addPixelPadding(originalBox, camera, renderer, pixelPadX, pixelPadY) {
   return paddedBox;
 }
 
-module.exports = {
+function addPixelPaddingNoCam(box, paddingX, paddingY, paddingZ) {
+  // Clone the box to avoid modifying the original
+  let paddedBox = box.clone();
+
+  // Calculate padding in world space
+  let paddingVector = new THREE.Vector3(paddingX, paddingY, paddingZ);
+
+  // Add the padding to the box min and max
+  paddedBox.min.sub(paddingVector);
+  paddedBox.max.add(paddingVector);
+
+  return paddedBox;
+}
+
+export {
   extractVertexPositions,
   getLipIndices,
   getLipIndicesFromJson,
   handleError,
   addPixelPadding,
+  addPixelPaddingNoCam
 };

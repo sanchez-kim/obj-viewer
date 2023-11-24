@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { OBJLoader } from "OBJLoader";
+import { OrbitControls } from "OrbitControls";
 
 import {
   extractVertexPositions,
@@ -7,6 +8,7 @@ import {
   getLipIndicesFromJson,
   handleError,
   addPixelPadding,
+  addPixelPaddingNoCam,
 } from "./utils.js";
 
 const scene = new THREE.Scene();
@@ -20,13 +22,9 @@ renderer.setSize(canvas.width, canvas.height); // set window size
 renderer.setClearColor(0xffffff); // set background color
 
 // camera info
-const camera = new THREE.PerspectiveCamera(75, aspectRatio, 0.1, 1000);
-camera.position.set(0, -0.4, 18);
-camera.fov = 8;
+let camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 1000);
+camera.position.set(0, 0, 5);
 camera.updateProjectionMatrix();
-// let camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 1000);
-// camera.position.set(0, -0.5, 5);
-// camera.updateProjectionMatrix();
 
 // lighting option
 const light = new THREE.DirectionalLight(0xffffff, 2.0);
@@ -36,6 +34,17 @@ scene.add(light);
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.05);
 scene.add(ambientLight);
 
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; // optional, for inertia during rotation
+controls.dampingFactor = 0.05;
+
+controls.screenSpacePanning = false;
+
+controls.minDistance = 100; // minimum zoom distance
+controls.maxDistance = 500; // maximum zoom distance
+
+controls.maxPolarAngle = Math.PI / 2; // limit angle of rotation
+
 window.addEventListener("resize", function () {
   const newAspectRatio = canvas.width / canvas.height;
   camera.aspect = newAspectRatio;
@@ -43,13 +52,14 @@ window.addEventListener("resize", function () {
   renderer.setSize(canvas.width, canvas.height);
 
   // Resize overlay canvas
-  const overlayCanvas = document.getElementById("overlay_canvas");
-  overlayCanvas.width = canvas.width;
-  overlayCanvas.height = canvas.height;
+  // const overlayCanvas = document.getElementById("overlay_canvas");
+  // overlayCanvas.width = canvas.width;
+  // overlayCanvas.height = canvas.height;
 });
 
 function animate() {
   requestAnimationFrame(animate);
+  controls.update();
   renderer.render(scene, camera);
 
   if (captureNextFrame) {
@@ -66,6 +76,63 @@ let boxHelper;
 let extendedBoxHelper;
 let boxes = [];
 let captureNextFrame = false;
+
+let modelBoundingBox;
+let modelSize;
+let largestDimension;
+let modelScaleFactor;
+
+function getBoxCorners(box) {
+  const corners = [
+    new THREE.Vector3(box.min.x, box.min.y, box.min.z),
+    new THREE.Vector3(box.min.x, box.min.y, box.max.z),
+    new THREE.Vector3(box.min.x, box.max.y, box.min.z),
+    new THREE.Vector3(box.min.x, box.max.y, box.max.z),
+    new THREE.Vector3(box.max.x, box.min.y, box.min.z),
+    new THREE.Vector3(box.max.x, box.min.y, box.max.z),
+    new THREE.Vector3(box.max.x, box.max.y, box.min.z),
+    new THREE.Vector3(box.max.x, box.max.y, box.max.z),
+  ];
+  return corners;
+}
+
+function drawBox2D(corners2D, context) {
+  if (!context) {
+    console.error("2D context not available.");
+    return;
+  }
+
+  context.beginPath();
+  context.moveTo(corners2D[0].x, corners2D[0].y);
+  context.lineTo(corners2D[1].x, corners2D[1].y);
+  context.lineTo(corners2D[3].x, corners2D[3].y);
+  context.lineTo(corners2D[2].x, corners2D[2].y);
+  context.lineTo(corners2D[0].x, corners2D[0].y);
+
+  context.moveTo(corners2D[4].x, corners2D[4].y);
+  context.lineTo(corners2D[5].x, corners2D[5].y);
+  context.lineTo(corners2D[7].x, corners2D[7].y);
+  context.lineTo(corners2D[6].x, corners2D[6].y);
+  context.lineTo(corners2D[4].x, corners2D[4].y);
+
+  for (let i = 0; i < 4; i++) {
+    context.moveTo(corners2D[i].x, corners2D[i].y);
+    context.lineTo(corners2D[i + 4].x, corners2D[i + 4].y);
+  }
+
+  context.strokeStyle = "red";
+  context.stroke();
+}
+
+function projectTo2D(corners, camera) {
+  return corners.map((corner) => {
+    let projected = corner.clone().project(camera);
+    // Convert from NDC to screen space
+    projected.x = ((projected.x + 1) / 2) * window.innerWidth;
+    projected.y = (-(projected.y - 1) / 2) * window.innerHeight;
+    return projected;
+  });
+}
 
 // remove previous lip vertices
 function clearPreviousLip(spheres, boxes) {
@@ -85,67 +152,6 @@ async function setLibraryFolderAndLoadFiles() {
   }
 }
 
-// TODO: fix the projection problem
-// when projecting 3d to 2d, the box is off the lip outline
-function drawBoundingBoxes(
-  paddedBox,
-  camera,
-  renderer,
-  padX,
-  padY,
-  color = "red"
-) {
-  const screenPosition = toScreenPosition(
-    paddedBox,
-    camera,
-    renderer,
-    padX,
-    padY
-  );
-
-  const overlayCanvas = document.getElementById("overlay_canvas");
-  const ctx = overlayCanvas.getContext("2d");
-  ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-  ctx.strokeStyle = color;
-  ctx.strokeRect(
-    screenPosition.x,
-    screenPosition.y,
-    screenPosition.width,
-    screenPosition.height
-  );
-}
-
-function toScreenPosition(box, camera, renderer, pixelPadX, pixelPadY) {
-  if (!box || !box.min || !box.max) {
-    console.error("Invalid bounding box provided to toScreenPosition");
-    return;
-  }
-
-  // Calculate the factors to convert from NDC to screen space
-  const halfWidth = renderer.domElement.width / 2;
-  const halfHeight = renderer.domElement.height / 2;
-
-  // Convert the 3D box min and max into NDC
-  const minNDC = box.min.clone().project(camera);
-  const maxNDC = box.max.clone().project(camera);
-
-  // Convert from NDC to screen space
-  let pos = {
-    x: (minNDC.x + 1) * halfWidth,
-    y: (-maxNDC.y + 1) * halfHeight,
-    width: (maxNDC.x - minNDC.x) * halfWidth,
-    height: (maxNDC.y - minNDC.y) * halfHeight,
-  };
-
-  // Apply pixel padding
-  pos.x -= pixelPadX / 2;
-  pos.y -= pixelPadY / 2;
-  pos.width += pixelPadX;
-  pos.height += pixelPadY;
-
-  return pos;
-}
-
 function selectFile(fileItem, filePath) {
   const fileList = document.getElementById("fileList");
   Array.from(fileList.children).forEach((child) => {
@@ -163,8 +169,9 @@ async function loadObjFilesFromDirectory(directory) {
     fileList.innerHTML = ""; // Clear the previous file list
 
     fullPaths.forEach((fullPath) => {
-      // Extract file name from the full path
-      const fileName = fullPath.split("/").pop();
+      // Extract file name from the full path, for windows
+      const fileName = fullPath.split("\\").pop();
+      // const fileName = fullPath.split("/").pop();
 
       const fileItem = document.createElement("div");
       fileItem.textContent = fileName;
@@ -205,19 +212,24 @@ function loadObjFile(filePath, texture) {
 
   loader.load(
     filePath,
-    async (object) => {
-      object.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          // child.material = new THREE.MeshStandardMaterial(
-          //   { map: texture }
-          // );
+    (object) => {
+      let modelBoundingBox = new THREE.Box3().setFromObject(object);
+      let modelSize = modelBoundingBox.getSize(new THREE.Vector3());
+      console.log("Model Size: ", modelSize);
 
-          const geometry = child.geometry;
-          geometry.computeBoundingBox();
-          const centroid = new THREE.Vector3();
-          geometry.boundingBox.getCenter(centroid);
-        }
-      });
+      let largestDimension = Math.max(modelSize.x, modelSize.y, modelSize.z);
+      console.log("Largest Dimension: ", largestDimension);
+
+      let modelScaleFactor = largestDimension / 1000;
+      console.log("Model Scale Factor: ", modelScaleFactor);
+
+      // Get the center of the bounding box
+      let center = modelBoundingBox.getCenter(new THREE.Vector3());
+
+      // Translate the object to center it
+      object.position.sub(center);
+
+      // Add the object to the scene
       scene.add(object);
 
       currentObj = object; // update the reference to the currently displayed obj
@@ -227,19 +239,21 @@ function loadObjFile(filePath, texture) {
       const jsonPath = filePath.replace(".obj", ".json");
 
       Promise.all([
-        extractVertexPositions(filePath),
-        getLipIndicesFromJson(jsonPath)
-          .then((lipIndices) => {
-            return lipIndices;
-          })
-          .catch((error) => {
-            handleError(
-              error,
-              "해당하는 JSON 파일을 찾지못했습니다.\n 파일이 존재하는지 확인하십시오."
-            );
-            throw error;
-          }),
-        getLipIndices("public/lip_outline_index.txt"),
+        extractVertexPositions(filePath, object.position),
+        // getLipIndices("./public/error.txt"),
+        getLipIndices("public/lip_index_old.txt"),
+        // getLipIndicesFromJson(jsonPath)
+        //   .then((lipIndices) => {
+        //     return lipIndices;
+        //   })
+        //   .catch((error) => {
+        //     handleError(
+        //       error,
+        //       "해당하는 JSON 파일을 찾지못했습니다.\n 파일이 존재하는지 확인하십시오."
+        //     );
+        //     throw error;
+        //   }),
+        getLipIndices("./public/lip_outline_old.txt"),
       ])
         .then(([vertices, lipIndices, outLip]) => {
           // Create a bounding box using the lip outline indices
@@ -256,41 +270,59 @@ function loadObjFile(filePath, texture) {
             }
           });
 
-          // JSON 파일에서 인덱스 좌표를 불러올 경우 립버텍스 처리 방식
-          Object.keys(lipIndices).forEach((key) => {
-            const vertexArray = lipIndices[key];
-            const vertex = new THREE.Vector3(...vertexArray);
-            const sphereGeometry = new THREE.SphereGeometry(0.003, 16, 16); // 립버텍스 점 크기가 넘무 작으면 이것을 조절
-            const sphereMaterial = new THREE.MeshBasicMaterial({
-              color: 0xff0000, // 점 색깔
-            });
-            const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-            sphere.position.copy(vertex);
-            scene.add(sphere);
-            spheres.push(sphere);
+          // // JSON 파일에서 인덱스 좌표를 불러올 경우 립버텍스 처리 방식
+          // Object.keys(lipIndices).forEach((key) => {
+          //   const vertexArray = lipIndices[key];
+          //   const vertex = new THREE.Vector3(...vertexArray);
+          //   const sphereGeometry = new THREE.SphereGeometry(0.003, 16, 16); // 립버텍스 점 크기가 넘무 작으면 이것을 조절
+          //   const sphereMaterial = new THREE.MeshBasicMaterial({
+          //     color: 0xff0000, // 점 색깔
+          //   });
+          //   const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+          //   sphere.position.copy(vertex);
+          //   scene.add(sphere);
+          //   spheres.push(sphere);
+          // });
+
+          // txt 파일에서 립버텍스 인덱스만 읽어올 경우 처리 방식
+          lipIndices.forEach((index) => {
+            if (index) {
+              if (index >= 0 && index < vertices.length) {
+                const vertex = vertices[index];
+                const sphereGeometry = new THREE.SphereGeometry(0.003, 16, 16);
+                const sphereMaterial = new THREE.MeshBasicMaterial({
+                  color: 0xff0000,
+                });
+
+                const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+                sphere.position.copy(vertex);
+                scene.add(sphere);
+
+                spheres.push(sphere);
+              } else {
+                console.error(`Vertex index ${index} is out of bounds`);
+              }
+            }
           });
-          animate();
 
           const box = new THREE.Box3(min, max);
 
           // 바운딩 박스 패딩 설정
-          let paddedBox = addPixelPadding(
+          let paddedBox = addPixelPaddingNoCam(
             box.clone(),
-            camera,
-            renderer,
             50,
-            40
-          );
-
-          let paddedBox2 = addPixelPadding(
-            box.clone(),
-            camera,
-            renderer,
+            40,
             100,
-            80
+            modelScaleFactor
           );
 
-          // drawBoundingBoxes(box.clone(), camera, renderer, 0, 0, "blue");
+          let paddedBox2 = addPixelPaddingNoCam(
+            box.clone(),
+            100,
+            80,
+            100,
+            modelScaleFactor
+          );
 
           boxHelper = new THREE.Box3Helper(paddedBox, 0x33ff45);
           extendedBoxHelper = new THREE.Box3Helper(paddedBox2, 0xff33ce);
@@ -300,6 +332,27 @@ function loadObjFile(filePath, texture) {
 
           boxes.push(boxHelper);
           boxes.push(extendedBoxHelper);
+
+          // // visualize additional sphere just for the test
+          // const sphereGeometry2 = new THREE.SphereGeometry(0.05, 16, 16);
+          // const sphereMaterial2 = new THREE.MeshBasicMaterial({
+          //   color: 0x00ff00,
+          // });
+          // const sphere2 = new THREE.Mesh(sphereGeometry2, sphereMaterial2);
+          // const sphere3 = new THREE.Mesh(sphereGeometry2, sphereMaterial2);
+          // const errorSphere = new THREE.Mesh(sphereGeometry2, sphereMaterial2);
+          // sphere2.position.add(
+          //   new THREE.Vector3(paddedBox.min.x, paddedBox.min.y, paddedBox.min.z)
+          // );
+          // sphere3.position.add(
+          //   new THREE.Vector3(paddedBox.max.x, paddedBox.max.y, paddedBox.max.z)
+          // );
+          // errorSphere.position.add(new THREE.Vector3(1, 1, 1));
+          // scene.add(sphere2);
+          // scene.add(sphere3);
+          // scene.add(errorSphere);
+
+          animate();
         })
         .catch((error) => {
           console.error("An error occurred: ", error);

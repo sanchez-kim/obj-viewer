@@ -2,10 +2,10 @@ const Client = require("ssh2").Client;
 const fs = require("fs");
 const path = require("path");
 const { logger } = require("./logger");
+require("dotenv").config();
 
 // Directories on the remote server
-const baseDir =
-  "/external/ssd2/ai_team/jenny/AIdata/3dtalkingface/dataset/processed_1st/labels/3Ddata/Model6/";
+const baseDir = process.env.BASE_DIR;
 
 // Utility function to list files in a directory with a specific extension
 async function listFiles(sftp, directory, extension) {
@@ -66,8 +66,8 @@ function matchFilePairs(objFiles, jsonFiles, objDirectory, jsonDirectory) {
 function createSSHConnection() {
   const sshClient = new Client();
   const connectionParams = {
-    host: "192.168.1.206",
-    username: "sanchez",
+    host: process.env.REMOTE_HOST,
+    username: process.env.USERNAME,
     privateKey: fs.readFileSync(path.join(process.env.HOME, ".ssh/id_rsa")),
   };
   return new Promise((resolve, reject) => {

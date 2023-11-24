@@ -3,11 +3,16 @@
 node_modules
 release-builds
 .DS_Store
+.env
 
 # temp
 .vscode
 samples
 notebooks
+temp
 
 # Local Netlify folder
 .netlify
+
+# logs
+log.txt

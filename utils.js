@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-async function extractVertexPositions(filePath) {
+async function extractVertexPositions(filePath, objectPosition) {
   const response = await fetch(filePath);
   const text = await response.text();
   const lines = text.split("\n");
@@ -10,7 +10,9 @@ async function extractVertexPositions(filePath) {
   for (const line of lines) {
     if (line.startsWith("v ")) {
       const parts = line.split(" ").map(parseFloat).slice(1);
-      vertices.push(new THREE.Vector3(...parts));
+      const vertex = new THREE.Vector3(...parts);
+      vertex.add(objectPosition);
+      vertices.push(vertex);
     }
   }
   return vertices;
@@ -92,16 +94,22 @@ function addPixelPadding(originalBox, camera, renderer, pixelPadX, pixelPadY) {
   return paddedBox;
 }
 
-function addPixelPaddingNoCam(box, paddingX, paddingY, paddingZ) {
-  // Clone the box to avoid modifying the original
-  let paddedBox = box.clone();
+function addPixelPaddingNoCam(box, paddingX, paddingY, paddingZ, scale) {
+  let paddedBox = box;
+  let paddingVector = new THREE.Vector3(
+    paddingX * scale,
+    paddingY * scale,
+    paddingZ * scale
+  );
 
-  // Calculate padding in world space
-  let paddingVector = new THREE.Vector3(paddingX, paddingY, paddingZ);
-
-  // Add the padding to the box min and max
+  // console.log(
+  //   `Before padding: min = ${paddedBox.min.toArray()}, max = ${paddedBox.max.toArray()}`
+  // );
   paddedBox.min.sub(paddingVector);
   paddedBox.max.add(paddingVector);
+  // console.log(
+  //   `After padding: min = ${paddedBox.min.toArray()}, max = ${paddedBox.max.toArray()}`
+  // );
 
   return paddedBox;
 }
@@ -112,5 +120,5 @@ export {
   getLipIndicesFromJson,
   handleError,
   addPixelPadding,
-  addPixelPaddingNoCam
+  addPixelPaddingNoCam,
 };

@@ -342,4 +342,4 @@ async function main() {
 
 main();
 
-// https://ins-ai-speech.s3.ap-northeast-2.amazonaws.com/prod/v2/M05/S2001/F000/M05_S2001_F000.obj
+// https://ins-ai-speech.s3.ap-northeast-2.amazonaws.com/prod/v2/M06/S2501/F001/M06_S2501_F001.png

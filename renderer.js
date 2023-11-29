@@ -107,8 +107,8 @@ async function loadObjFilesFromDirectory(directory) {
 
     fullPaths.forEach((fullPath) => {
       // Extract file name from the full path, for windows
-      // const fileName = fullPath.split("\\").pop();
-      const fileName = fullPath.split("/").pop();
+      const fileName = fullPath.split("\\").pop();
+      // const fileName = fullPath.split("/").pop();
 
       const fileItem = document.createElement("div");
       fileItem.textContent = fileName;
@@ -163,9 +163,10 @@ function loadObjFile(filePath, texture) {
       // Get the center of the bounding box
       let center = modelBoundingBox.getCenter(new THREE.Vector3());
 
-      object.traverse((child) => {
-        child.material = new THREE.MeshStandardMaterial({ map: texture });
-      });
+      // apply texture to the object
+      // object.traverse((child) => {
+      //   child.material = new THREE.MeshStandardMaterial({ map: texture });
+      // });
 
       // Translate the object to center it
       object.position.sub(center);

@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "start": "electron .",
-    "package": "electron-packager . objviewer --overwrite --platform=win32 --arch=x64 --prune=true --out=release-builds --icon=public/insighter.ico"
+    "package": "electron-packager . objviewer --overwrite --platform=win32 --arch=x64 --prune=true --out=release-builds --icon=assets/insighter.ico"
   },
   "type": "commonjs",
   "author": "Sanchez Kim",

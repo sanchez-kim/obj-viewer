@@ -154,8 +154,8 @@ async function loadFiles(objContent, objText) {
 
     const vertices = await extractVertex(objText, object.position);
 
-    const lipIndices = await getLipIndices("./public/lip_index_old.txt");
-    const outLip = await getLipIndices("./public/lip_outline_old.txt");
+    const lipIndices = await getLipIndices("./assets/lip/lip_index_old.txt");
+    const outLip = await getLipIndices("./assets/lip/lip_outline_old.txt");
     // const outLip = [12974, 7024, 21433, 18424, 7007];
 
     const min = new THREE.Vector3(Infinity, Infinity, Infinity);

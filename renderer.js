@@ -7,7 +7,6 @@ import {
   getLipIndices,
   getLipIndicesFromJson,
   handleError,
-  addPixelPadding,
   addPixelPaddingNoCam,
 } from "./utils.js";
 
@@ -50,11 +49,6 @@ window.addEventListener("resize", function () {
   camera.aspect = newAspectRatio;
   camera.updateProjectionMatrix();
   renderer.setSize(canvas.width, canvas.height);
-
-  // Resize overlay canvas
-  // const overlayCanvas = document.getElementById("overlay_canvas");
-  // overlayCanvas.width = canvas.width;
-  // overlayCanvas.height = canvas.height;
 });
 
 function animate() {
@@ -76,63 +70,6 @@ let boxHelper;
 let extendedBoxHelper;
 let boxes = [];
 let captureNextFrame = false;
-
-let modelBoundingBox;
-let modelSize;
-let largestDimension;
-let modelScaleFactor;
-
-function getBoxCorners(box) {
-  const corners = [
-    new THREE.Vector3(box.min.x, box.min.y, box.min.z),
-    new THREE.Vector3(box.min.x, box.min.y, box.max.z),
-    new THREE.Vector3(box.min.x, box.max.y, box.min.z),
-    new THREE.Vector3(box.min.x, box.max.y, box.max.z),
-    new THREE.Vector3(box.max.x, box.min.y, box.min.z),
-    new THREE.Vector3(box.max.x, box.min.y, box.max.z),
-    new THREE.Vector3(box.max.x, box.max.y, box.min.z),
-    new THREE.Vector3(box.max.x, box.max.y, box.max.z),
-  ];
-  return corners;
-}
-
-function drawBox2D(corners2D, context) {
-  if (!context) {
-    console.error("2D context not available.");
-    return;
-  }
-
-  context.beginPath();
-  context.moveTo(corners2D[0].x, corners2D[0].y);
-  context.lineTo(corners2D[1].x, corners2D[1].y);
-  context.lineTo(corners2D[3].x, corners2D[3].y);
-  context.lineTo(corners2D[2].x, corners2D[2].y);
-  context.lineTo(corners2D[0].x, corners2D[0].y);
-
-  context.moveTo(corners2D[4].x, corners2D[4].y);
-  context.lineTo(corners2D[5].x, corners2D[5].y);
-  context.lineTo(corners2D[7].x, corners2D[7].y);
-  context.lineTo(corners2D[6].x, corners2D[6].y);
-  context.lineTo(corners2D[4].x, corners2D[4].y);
-
-  for (let i = 0; i < 4; i++) {
-    context.moveTo(corners2D[i].x, corners2D[i].y);
-    context.lineTo(corners2D[i + 4].x, corners2D[i + 4].y);
-  }
-
-  context.strokeStyle = "red";
-  context.stroke();
-}
-
-function projectTo2D(corners, camera) {
-  return corners.map((corner) => {
-    let projected = corner.clone().project(camera);
-    // Convert from NDC to screen space
-    projected.x = ((projected.x + 1) / 2) * window.innerWidth;
-    projected.y = (-(projected.y - 1) / 2) * window.innerHeight;
-    return projected;
-  });
-}
 
 // remove previous lip vertices
 function clearPreviousLip(spheres, boxes) {
@@ -170,8 +107,8 @@ async function loadObjFilesFromDirectory(directory) {
 
     fullPaths.forEach((fullPath) => {
       // Extract file name from the full path, for windows
-      const fileName = fullPath.split("\\").pop();
-      // const fileName = fullPath.split("/").pop();
+      // const fileName = fullPath.split("\\").pop();
+      const fileName = fullPath.split("/").pop();
 
       const fileItem = document.createElement("div");
       fileItem.textContent = fileName;
@@ -187,7 +124,7 @@ async function loadTexture(filePath) {
   const textureLoader = new THREE.TextureLoader();
 
   textureLoader.load(
-    "samples/M05.png",
+    "assets/textures/M05.png",
     (textureImage) => {
       loadObjFile(filePath, textureImage);
     },
@@ -226,6 +163,10 @@ function loadObjFile(filePath, texture) {
       // Get the center of the bounding box
       let center = modelBoundingBox.getCenter(new THREE.Vector3());
 
+      object.traverse((child) => {
+        child.material = new THREE.MeshStandardMaterial({ map: texture });
+      });
+
       // Translate the object to center it
       object.position.sub(center);
 
@@ -240,8 +181,7 @@ function loadObjFile(filePath, texture) {
 
       Promise.all([
         extractVertexPositions(filePath, object.position),
-        // getLipIndices("./public/error.txt"),
-        getLipIndices("public/lip_index_old.txt"),
+        getLipIndices("assets/lip/lip_index_old.txt"),
         // getLipIndicesFromJson(jsonPath)
         //   .then((lipIndices) => {
         //     return lipIndices;
@@ -253,7 +193,7 @@ function loadObjFile(filePath, texture) {
         //     );
         //     throw error;
         //   }),
-        getLipIndices("./public/lip_outline_old.txt"),
+        getLipIndices("./assets/lip/lip_outline_old.txt"),
       ])
         .then(([vertices, lipIndices, outLip]) => {
           // Create a bounding box using the lip outline indices
@@ -333,7 +273,7 @@ function loadObjFile(filePath, texture) {
           boxes.push(boxHelper);
           boxes.push(extendedBoxHelper);
 
-          // // visualize additional sphere just for the test
+          // // visualize additional sphere to see if padding is working properly
           // const sphereGeometry2 = new THREE.SphereGeometry(0.05, 16, 16);
           // const sphereMaterial2 = new THREE.MeshBasicMaterial({
           //   color: 0x00ff00,

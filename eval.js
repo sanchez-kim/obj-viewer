@@ -293,7 +293,8 @@ const MODELS = {
 // }
 
 async function main() {
-  const modelNum = 7;
+  // 모델 번호 입력
+  const modelNum = 3;
   try {
     if (MODELS[modelNum]) {
       const [startSentenceNum, endSentenceNum] = MODELS[modelNum];
@@ -322,7 +323,10 @@ async function main() {
               await processFilePairs(objUrl);
             }
           } catch (error) {
-            logger(`Error processing file: ${objUrl} - ${error}`);
+            const modelStr = modelNum.toString().padStart(2, "0");
+            const sentenceStr = sentenceNum.toString().padStart(4, "0");
+            const frameStr = frameNum.toString().padStart(3, "0");
+            logger(`Error processing file: M${modelNum}_S${sentenceStr}_F${frameStr} - ${error}`);
             errorCount += 1;
 
             if (errorCount > 5) {

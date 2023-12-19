@@ -21,7 +21,8 @@ renderer.setSize(canvas.width, canvas.height); // set window size
 renderer.setClearColor(0xffffff); // set background color
 
 // camera info
-let camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 1000);
+let size = 0.6;
+let camera = new THREE.OrthographicCamera(-size, size, size, -size, 1, 1000);
 camera.position.set(0, 0, 5);
 camera.updateProjectionMatrix();
 
@@ -150,6 +151,7 @@ function loadObjFile(filePath, texture) {
   loader.load(
     filePath,
     (object) => {
+      
       let modelBoundingBox = new THREE.Box3().setFromObject(object);
       let modelSize = modelBoundingBox.getSize(new THREE.Vector3());
       console.log("Model Size: ", modelSize);
@@ -182,18 +184,18 @@ function loadObjFile(filePath, texture) {
 
       Promise.all([
         extractVertexPositions(filePath, object.position),
-        getLipIndices("assets/lip/lip_index_old.txt"),
-        // getLipIndicesFromJson(jsonPath)
-        //   .then((lipIndices) => {
-        //     return lipIndices;
-        //   })
-        //   .catch((error) => {
-        //     handleError(
-        //       error,
-        //       "해당하는 JSON 파일을 찾지못했습니다.\n 파일이 존재하는지 확인하십시오."
-        //     );
-        //     throw error;
-        //   }),
+        // getLipIndices("assets/lip/lip_index_old.txt"),
+        getLipIndicesFromJson(jsonPath)
+          .then((lipIndices) => {
+            return lipIndices;
+          })
+          .catch((error) => {
+            handleError(
+              error,
+              "해당하는 JSON 파일을 찾지못했습니다.\n 파일이 존재하는지 확인하십시오."
+            );
+            throw error;
+          }),
         getLipIndices("./assets/lip/lip_outline_old.txt"),
       ])
         .then(([vertices, lipIndices, outLip]) => {
@@ -211,40 +213,40 @@ function loadObjFile(filePath, texture) {
             }
           });
 
-          // // JSON 파일에서 인덱스 좌표를 불러올 경우 립버텍스 처리 방식
-          // Object.keys(lipIndices).forEach((key) => {
-          //   const vertexArray = lipIndices[key];
-          //   const vertex = new THREE.Vector3(...vertexArray);
-          //   const sphereGeometry = new THREE.SphereGeometry(0.003, 16, 16); // 립버텍스 점 크기가 넘무 작으면 이것을 조절
-          //   const sphereMaterial = new THREE.MeshBasicMaterial({
-          //     color: 0xff0000, // 점 색깔
-          //   });
-          //   const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-          //   sphere.position.copy(vertex);
-          //   scene.add(sphere);
-          //   spheres.push(sphere);
-          // });
-
-          // txt 파일에서 립버텍스 인덱스만 읽어올 경우 처리 방식
-          lipIndices.forEach((index) => {
-            if (index) {
-              if (index >= 0 && index < vertices.length) {
-                const vertex = vertices[index];
-                const sphereGeometry = new THREE.SphereGeometry(0.003, 16, 16);
-                const sphereMaterial = new THREE.MeshBasicMaterial({
-                  color: 0xff0000,
-                });
-
-                const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-                sphere.position.copy(vertex);
-                scene.add(sphere);
-
-                spheres.push(sphere);
-              } else {
-                console.error(`Vertex index ${index} is out of bounds`);
-              }
-            }
+          // JSON 파일에서 인덱스 좌표를 불러올 경우 립버텍스 처리 방식
+          Object.keys(lipIndices).forEach((key) => {
+            const vertexArray = lipIndices[key];
+            const vertex = new THREE.Vector3(...vertexArray);
+            const sphereGeometry = new THREE.SphereGeometry(0.001, 16, 16); // 립버텍스 점 크기가 넘무 작으면 이것을 조절
+            const sphereMaterial = new THREE.MeshBasicMaterial({
+              color: 0xff0000, // 점 색깔
+            });
+            const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+            sphere.position.copy(vertex);
+            scene.add(sphere);
+            spheres.push(sphere);
           });
+
+          // // txt 파일에서 립버텍스 인덱스만 읽어올 경우 처리 방식
+          // lipIndices.forEach((index) => {
+          //   if (index) {
+          //     if (index >= 0 && index < vertices.length) {
+          //       const vertex = vertices[index];
+          //       const sphereGeometry = new THREE.SphereGeometry(0.001, 16, 16);
+          //       const sphereMaterial = new THREE.MeshBasicMaterial({
+          //         color: 0xff0000,
+          //       });
+
+          //       const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+          //       sphere.position.copy(vertex);
+          //       scene.add(sphere);
+
+          //       spheres.push(sphere);
+          //     } else {
+          //       console.error(`Vertex index ${index} is out of bounds`);
+          //     }
+          //   }
+          // });
 
           const box = new THREE.Box3(min, max);
 

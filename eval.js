@@ -10,12 +10,57 @@ async function loadOBJLoader() {
 const fs = require("fs").promises;
 const path = require("path");
 const axios = require("axios");
+const { S3Client, ListObjectsV2Command } = require('@aws-sdk/client-s3');
+
+require('dotenv').config();
+
+const s3 = new S3Client({
+  region: 'ap-northeast-2',
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+  }
+});
+
 const { logger } = require("./logger");
 
 let modelBoundingBox;
 let modelSize;
 let largestDimension;
 let modelScaleFactor;
+
+async function getRandomFilePaths(modelNum, sentenceNum) {
+  const bucketName = 'ins-ai-speech';
+  const prefix = `reprocessed_v2/3Ddata/Model${modelNum}/Sentence${sentenceNum.toString().padStart(4, '0')}/3Dmesh/`;
+
+  const params = {
+      Bucket: bucketName,
+      Prefix: prefix
+  };
+
+  try {
+    const command = new ListObjectsV2Command(params);
+    const data = await s3.send(command);
+    const fileKeys = data.Contents.map(content => content.Key);
+
+    // Randomly pick 5 file paths
+    let selectedFiles = [];
+    while (selectedFiles.length < 5 && fileKeys.length > 0) {
+        const randomIndex = Math.floor(Math.random() * fileKeys.length);
+        selectedFiles.push(fileKeys.splice(randomIndex, 1)[0]);
+    }
+
+    return selectedFiles.map(filePath => generateS3Url(modelNum, sentenceNum, extractFrameNum(filePath), 'obj'));
+} catch (error) {
+    console.error("Error fetching from S3:", error);
+    return [];
+}
+}
+
+function extractFrameNum(filePath) {
+  const frameMatch = filePath.match(/F(\d{3})\.obj$/);
+  return frameMatch ? parseInt(frameMatch[1], 10) : null;
+}
 
 async function getLipIndices(filePath) {
   try {
@@ -50,7 +95,8 @@ function generateS3Url(modelNum, sentenceNum, frameNum, fileType) {
   const sentenceStr = sentenceNum.toString().padStart(4, "0");
   const frameStr = frameNum.toString().padStart(3, "0");
 
-  return `https://ins-ai-speech.s3.ap-northeast-2.amazonaws.com/prod/v2/M${modelStr}/S${sentenceStr}/F${frameStr}/M${modelStr}_S${sentenceStr}_F${frameStr}.${fileType}`;
+  return `https://ins-ai-speech.s3.amazonaws.com/reprocessed_v2/3Ddata/Model${modelNum.toString()}/Sentence${sentenceStr}/3Dmesh/M${modelStr}_S${sentenceStr}_F${frameStr}.${fileType}`
+
 }
 
 async function loadOBJText(url) {
@@ -279,67 +325,45 @@ const MODELS = {
   9: [4001, 4500],
   10: [4501, 5000],
 };
-// async function main() {
-//   try {
-//     const modelNum = 5; // Specify the model number
-//     const sentenceNum = 2001; // Specify the sentence number
-//     const frameNum = 1; // Specify the frame number
-
-//     const objUrl = generateS3Url(modelNum, sentenceNum, frameNum, "obj");
-//     await processFilePairs(objUrl);
-//   } catch (error) {
-//     logger(`Error in main: ${error}`);
-//   }
-// }
 
 async function main() {
-  const modelNum = 7;
-  try {
-    if (MODELS[modelNum]) {
-      const [startSentenceNum, endSentenceNum] = MODELS[modelNum];
+  for (let modelNum = 1; modelNum <= 10; modelNum++) {
+    try {
+      if (MODELS[modelNum]) {
+        const [startSentenceNum, endSentenceNum] = MODELS[modelNum];
+  
+        // Label for the outer loop
+        for (
+          let sentenceNum = startSentenceNum;
+          sentenceNum <= endSentenceNum;
+          sentenceNum++
+        ) {
 
-      // Label for the outer loop
-      sentenceLoop: for (
-        let sentenceNum = startSentenceNum;
-        sentenceNum <= endSentenceNum;
-        sentenceNum++
-      ) {
-        let errorCount = 0; // Counter for consecutive errors
+          const randomFilePaths = await getRandomFilePaths(modelNum, sentenceNum)
 
-        for (let frameNum = 0; frameNum <= 300; frameNum++) {
-          try {
-            const objUrl = generateS3Url(
-              modelNum,
-              sentenceNum,
-              frameNum,
-              "obj"
-            );
-            const currentFileName = path.basename(objUrl);
-            if (
-              currentFileName === lastProcessedFileName ||
-              !lastProcessedFileName
-            ) {
-              await processFilePairs(objUrl);
-            }
-          } catch (error) {
-            logger(`Error processing file: ${objUrl} - ${error}`);
-            errorCount += 1;
-
-            if (errorCount > 5) {
-              logger(`Skipping to next sentence after 5 consecutive errors.`);
-              continue sentenceLoop;
+          
+          for (let filePath of randomFilePaths) {
+            try {
+              
+              const currentFileName = path.basename(filePath);
+              if (
+                currentFileName === lastProcessedFileName ||
+                !lastProcessedFileName
+              ) {
+                await processFilePairs(filePath);
+              }
+            } catch (error) {
+              logger(`Error processing file: ${filePath} - ${error}`);
             }
           }
         }
+      } else {
+        logger(`Model number ${modelNum} is not defined in MODELS`);
       }
-    } else {
-      logger(`Model number ${modelNum} is not defined in MODELS`);
+    } catch (error) {
+      logger(`Error in main: ${error}`);
     }
-  } catch (error) {
-    logger(`Error in main: ${error}`);
   }
 }
 
 main();
-
-// https://ins-ai-speech.s3.ap-northeast-2.amazonaws.com/prod/v2/M06/S2501/F001/M06_S2501_F001.png

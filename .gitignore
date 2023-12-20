@@ -1,2 +1,6 @@
 node_modules
 samples
+
+log.txt
+log_*.txt
+.env

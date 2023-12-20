@@ -10,16 +10,16 @@ async function loadOBJLoader() {
 const fs = require("fs").promises;
 const path = require("path");
 const axios = require("axios");
-const { S3Client, ListObjectsV2Command } = require('@aws-sdk/client-s3');
+const { S3Client, ListObjectsV2Command } = require("@aws-sdk/client-s3");
 
-require('dotenv').config();
+require("dotenv").config();
 
 const s3 = new S3Client({
-  region: 'ap-northeast-2',
+  region: "ap-northeast-2",
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
-  }
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
 });
 
 const { logger } = require("./logger");
@@ -30,31 +30,37 @@ let largestDimension;
 let modelScaleFactor;
 
 async function getRandomFilePaths(modelNum, sentenceNum) {
-  const bucketName = 'ins-ai-speech';
-  const prefix = `reprocessed_v2/3Ddata/Model${modelNum}/Sentence${sentenceNum.toString().padStart(4, '0')}/3Dmesh/`;
+  const bucketName = "ins-ai-speech";
+  const prefix = `reprocessed_v2/3Ddata/Model${modelNum.toString()}/Sentence${sentenceNum
+    .toString()
+    .padStart(4, "0")}/3Dmesh/`;
 
   const params = {
-      Bucket: bucketName,
-      Prefix: prefix
+    Bucket: bucketName,
+    Prefix: prefix,
   };
 
   try {
     const command = new ListObjectsV2Command(params);
     const data = await s3.send(command);
-    const fileKeys = data.Contents.map(content => content.Key);
+    const fileKeys = data.Contents
+      ? data.Contents.map((content) => content.Key)
+      : [];
 
     // Randomly pick 5 file paths
     let selectedFiles = [];
     while (selectedFiles.length < 5 && fileKeys.length > 0) {
-        const randomIndex = Math.floor(Math.random() * fileKeys.length);
-        selectedFiles.push(fileKeys.splice(randomIndex, 1)[0]);
+      const randomIndex = Math.floor(Math.random() * fileKeys.length);
+      selectedFiles.push(fileKeys.splice(randomIndex, 1)[0]);
     }
 
-    return selectedFiles.map(filePath => generateS3Url(modelNum, sentenceNum, extractFrameNum(filePath), 'obj'));
-} catch (error) {
+    return selectedFiles.map((filePath) =>
+      generateS3Url(modelNum, sentenceNum, extractFrameNum(filePath), "obj")
+    );
+  } catch (error) {
     console.error("Error fetching from S3:", error);
     return [];
-}
+  }
 }
 
 function extractFrameNum(filePath) {
@@ -95,8 +101,7 @@ function generateS3Url(modelNum, sentenceNum, frameNum, fileType) {
   const sentenceStr = sentenceNum.toString().padStart(4, "0");
   const frameStr = frameNum.toString().padStart(3, "0");
 
-  return `https://ins-ai-speech.s3.amazonaws.com/reprocessed_v2/3Ddata/Model${modelNum.toString()}/Sentence${sentenceStr}/3Dmesh/M${modelStr}_S${sentenceStr}_F${frameStr}.${fileType}`
-
+  return `https://ins-ai-speech.s3.amazonaws.com/reprocessed_v2/3Ddata/Model${modelNum.toString()}/Sentence${sentenceStr}/3Dmesh/M${modelStr}_S${sentenceStr}_F${frameStr}.${fileType}`;
 }
 
 async function loadOBJText(url) {
@@ -123,14 +128,14 @@ async function loadOBJJson(url) {
   }
 }
 
-async function processFilePairs(objUrl) {
+async function processFilePairs(objUrl, jsonPath) {
   let objFileName;
 
   try {
     const objContent = await loadOBJJson(objUrl);
     const objText = await loadOBJText(objUrl);
 
-    const result = await loadFiles(objContent, objText);
+    const result = await loadFiles(objContent, objText, jsonPath);
 
     objFileName = path.basename(objUrl);
 
@@ -174,8 +179,20 @@ async function extractVertex(objText, objectPosition) {
   return vertices;
 }
 
+async function getLipIndicesFromJson(jsonPath) {
+  const fetch = (await import("node-fetch")).default;
+  try {
+    const response = await fetch(jsonPath);
+    const data = await response.json();
+    const lips = data["3d_data"]["lip_vertices"];
+    return lips;
+  } catch (error) {
+    logger("Error fetching OBJ file:", error);
+  }
+}
+
 // Function to load OBJ and JSON files
-async function loadFiles(objContent, objText) {
+async function loadFiles(objContent, objText, jsonPath) {
   try {
     const OBJLoader = await loadOBJLoader();
     const loader = new OBJLoader();
@@ -200,7 +217,9 @@ async function loadFiles(objContent, objText) {
 
     const vertices = await extractVertex(objText, object.position);
 
-    const lipIndices = await getLipIndices("./assets/lip/lip_index_old.txt");
+    // const lipIndices = await getLipIndices("./assets/lip/lip_index_old.txt");
+
+    const lipIndices = await getLipIndicesFromJson(jsonPath);
     const outLip = await getLipIndices("./assets/lip/lip_outline_old.txt");
     // const outLip = [12974, 7024, 21433, 18424, 7007];
 
@@ -251,30 +270,50 @@ function checkVertices(vertices, lipIndices, lipMask1, lipMask2, objFileName) {
   let details = {
     outsideLipMask1: [],
     outsideLipMask2: [],
-    totalCount: lipIndices.length,
+    totalCount: Object.keys(lipIndices).length,
+    // totalCount: lipIndices.length,
   };
-  // console.log("length of vertices: ", vertices.length);
-  // console.log("lipmask 1: ", lipMask1);
-  // console.log(
-  //   "lipmask contains point: ",
-  //   lipMask1.containsPoint(new THREE.Vector3(1, 1, 1))
-  // );
 
-  // console.log("vertices 20000: ", vertices[20000]);
-  // console.log(
-  //   "lipmask contains point: ",
-  //   lipMask1.containsPoint(vertices[20000])
-  // );
+  // // txt 파일에서 립버텍스 인덱스만 읽어올 경우 처리 방식
+  // lipIndices.forEach((index) => {
+  //   if (index >= 0 && index < vertices.length) {
+  //     const vertex = vertices[index];
 
-  lipIndices.forEach((index) => {
+  //     if (!lipMask1.containsPoint(vertex)) {
+  //       details.outsideLipMask1.push(index);
+  //     }
+
+  //     if (!lipMask2.containsPoint(vertex)) {
+  //       details.outsideLipMask2.push(index);
+  //     }
+  //   } else {
+  //     logger(`Vertex index ${index} is out of bounds`);
+  //   }
+  // });
+
+  // console.log(lipMask1);
+  // console.log(lipMask1.containsPoint(new THREE.Vector3(1, 1, 1)));
+
+  // if (!lipMask1.containsPoint(new THREE.Vector3(1, 1, 1))) {
+  //   details.outsideLipMask1.push(1);
+  // }
+
+  // json 파일에서 립버텍스 인덱스 좌표를 읽어올 경우 처리 방식
+  Object.keys(lipIndices).forEach((key) => {
+    const index = parseInt(key);
     if (index >= 0 && index < vertices.length) {
-      const vertex = vertices[index];
+      const vertexArray = lipIndices[index];
+      const vertexVector = new THREE.Vector3(
+        vertexArray[0],
+        vertexArray[1],
+        vertexArray[2]
+      );
 
-      if (!lipMask1.containsPoint(vertex)) {
+      if (!lipMask1.containsPoint(vertexVector)) {
         details.outsideLipMask1.push(index);
       }
 
-      if (!lipMask2.containsPoint(vertex)) {
+      if (!lipMask2.containsPoint(vertexVector)) {
         details.outsideLipMask2.push(index);
       }
     } else {
@@ -282,31 +321,26 @@ function checkVertices(vertices, lipIndices, lipMask1, lipMask2, objFileName) {
     }
   });
 
-  // if (
-  //   details.outsideLipMask1.length > 0 ||
-  //   details.outsideLipMask2.length > 0
-  // ) {
-  //   logger(`Some vertices are outside the lip masks in ${objFileName}!`);
-  //   // logger(`Vertices outside lipMask1: ${details.outsideLipMask1.length}`);
-  //   // logger(`Vertices outside lipMask2: ${details.outsideLipMask2.length}`);
-  //   // logger(`Vertices outside lipMask1: ${details.outsideLipMask1.join(", ")}`);
-  //   logger(`Vertices outside lipMask2: ${details.outsideLipMask2.join(", ")}`);
-  // } else if (details.totalCount < 4410) {
-  //   logger(`Total lip indices is less than 4410 in ${objFileName}!`);
-  //   logger(`Total lip indices: ${details.totalCount}`);
-  // } else {
-  //   logger(`All clear for ${objFileName}!`);
-  // }
-  if (details.outsideLipMask2 > 0) {
-    logger(`Some vertices outside the lipMask2: ${objFileName}`);
-  } else if (details.totalCount < 4410) {
+  const passed = details.outsideLipMask2.length === 0;
+
+  if (details.totalCount < 4410) {
     logger(`Total lip indices is less than 4410 in ${objFileName}!`);
+  } else if (details.outsideLipMask1.length > 0) {
+    logger(`Some vertices outside the lipMask1: ${objFileName}`);
+    logger(details.outsideLipMask1);
+  } else if (details.outsideLipMask2.length > 0) {
+    logger(`Some vertices outside the lipMask2: ${objFileName}`);
+    logger(details.outsideLipMask2);
   } else {
-    logger(`All clear for ${objFileName}!`);
+    if (passed) {
+      logger(`${objFileName}: PASSED`);
+    } else {
+      logger(`${objFileName}: FAILED`);
+    }
   }
 
   return {
-    passed: details.outsideLipMask2.length === 0,
+    passed,
     details,
   };
 }
@@ -331,26 +365,36 @@ async function main() {
     try {
       if (MODELS[modelNum]) {
         const [startSentenceNum, endSentenceNum] = MODELS[modelNum];
-  
+
         // Label for the outer loop
         for (
           let sentenceNum = startSentenceNum;
           sentenceNum <= endSentenceNum;
           sentenceNum++
         ) {
+          const randomFilePaths = await getRandomFilePaths(
+            modelNum,
+            sentenceNum
+          );
+          randomFilePaths.sort();
 
-          const randomFilePaths = await getRandomFilePaths(modelNum, sentenceNum)
+          const randomJsonPaths = randomFilePaths.map((filePath) =>
+            filePath
+              .replace("3Ddata", "meta")
+              .replace("3Dmesh", "Meta")
+              .replace(".obj", ".json")
+          );
 
-          
-          for (let filePath of randomFilePaths) {
+          for (let i = 0; i < randomFilePaths.length; i++) {
+            const filePath = randomFilePaths[i];
+            const jsonPath = randomJsonPaths[i];
             try {
-              
               const currentFileName = path.basename(filePath);
               if (
                 currentFileName === lastProcessedFileName ||
                 !lastProcessedFileName
               ) {
-                await processFilePairs(filePath);
+                await processFilePairs(filePath, jsonPath);
               }
             } catch (error) {
               logger(`Error processing file: ${filePath} - ${error}`);
@@ -365,5 +409,48 @@ async function main() {
     }
   }
 }
+
+// function extract(filename) {
+//   const regex = /M(\d+)_S(\d+)_F(\d+)/;
+//   const matches = regex.exec(filename);
+
+//   if (matches) {
+//     // Extracting and parsing the numbers
+//     const modelNum = parseInt(matches[1], 10);
+//     const sentenceNum = parseInt(matches[2], 10);
+//     const frameNum = parseInt(matches[3], 10);
+
+//     return { modelNum, sentenceNum, frameNum };
+//   } else {
+//     // Return null or throw an error if the format doesn't match
+//     return null;
+//   }
+// }
+
+// async function main() {
+//   let filename = "M01_S0001_F068";
+
+//   let { modelNum, sentenceNum, frameNum } = extract(filename);
+
+//   const modelStr = modelNum.toString().padStart(2, "0");
+//   const sentenceStr = sentenceNum.toString().padStart(4, "0");
+//   const frameStr = frameNum.toString().padStart(3, "0");
+
+//   try {
+//     const filePath = `https://ins-ai-speech.s3.amazonaws.com/reprocessed_v2/3Ddata/Model${modelNum.toString()}/Sentence${sentenceStr}/3Dmesh/M${modelStr}_S${sentenceStr}_F${frameStr}.obj`;
+//     const jsonPath = filePath
+//       .replace("3Ddata", "meta")
+//       .replace("3Dmesh", "Meta")
+//       .replace(".obj", ".json"); // Path to the corresponding .json file
+
+//     try {
+//       await processFilePairs(filePath, jsonPath);
+//     } catch (error) {
+//       logger(`Error processing file: ${filePath} - ${error}`);
+//     }
+//   } catch (error) {
+//     logger(`Error in main: ${error}`);
+//   }
+// }
 
 main();

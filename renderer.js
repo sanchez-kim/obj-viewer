@@ -151,7 +151,6 @@ function loadObjFile(filePath, texture) {
   loader.load(
     filePath,
     (object) => {
-      
       let modelBoundingBox = new THREE.Box3().setFromObject(object);
       let modelSize = modelBoundingBox.getSize(new THREE.Vector3());
       console.log("Model Size: ", modelSize);
@@ -277,22 +276,25 @@ function loadObjFile(filePath, texture) {
           boxes.push(extendedBoxHelper);
 
           // // visualize additional sphere to see if padding is working properly
-          // const sphereGeometry2 = new THREE.SphereGeometry(0.05, 16, 16);
+          // const sphereGeometry2 = new THREE.SphereGeometry(0.01, 16, 16);
           // const sphereMaterial2 = new THREE.MeshBasicMaterial({
           //   color: 0x00ff00,
           // });
           // const sphere2 = new THREE.Mesh(sphereGeometry2, sphereMaterial2);
           // const sphere3 = new THREE.Mesh(sphereGeometry2, sphereMaterial2);
-          // const errorSphere = new THREE.Mesh(sphereGeometry2, sphereMaterial2);
           // sphere2.position.add(
           //   new THREE.Vector3(paddedBox.min.x, paddedBox.min.y, paddedBox.min.z)
           // );
           // sphere3.position.add(
           //   new THREE.Vector3(paddedBox.max.x, paddedBox.max.y, paddedBox.max.z)
           // );
-          // errorSphere.position.add(new THREE.Vector3(1, 1, 1));
           // scene.add(sphere2);
           // scene.add(sphere3);
+
+          // const errorSphere = new THREE.Mesh(sphereGeometry2, sphereMaterial2);
+          // errorSphere.position.add(
+          //   new THREE.Vector3(-0.04047, 0.01228, 0.21216)
+          // );
           // scene.add(errorSphere);
 
           animate();
